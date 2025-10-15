@@ -1,1 +1,18 @@
+# --- Interfaz de usuario (Frontend de escritorio) ---
 PySide6
+#PySide6-WebEngine
+
+# --- Procesamiento de datos (ETL, integración) ---
+pandas
+lxml
+
+# --- Base de datos ---
+SQLAlchemy
+psycopg2-binary   # Driver de PostgreSQL para Python
+
+# --- Backend (si usas FastAPI o servicios internos) ---
+fastapi
+uvicorn
+
+# --- Utilidades opcionales (recomendadas) ---
+python-dotenv     # Para variables de entorno (credenciales DB, rutas, etc.)
