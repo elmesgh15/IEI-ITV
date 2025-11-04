@@ -46,13 +46,13 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
     if resultado:
         return resultado[0]
     else:
-        cursor.execute("INSERT INTO Localidad (nombre, codigo_provincia) VALUES (%s, %s) RETURNING id", (nombre_localidad, provincia_id))
+        cursor.execute("INSERT INTO Localidad (nombre, codigo_provincia) VALUES (%s, %s) RETURNING codigo", (nombre_localidad, provincia_id))
         return cursor.fetchone()[0]
     
 def extraer_datos_temporalmente():
-    ruta_archivo_csv = "datos/Estaciones_ITV.csv"
+    ruta_archivo_csv = "datos/Estacions_ITV.csv"
     try:
-        with open(ruta_archivo_csv, mode='r', encoding='utf-8') as f:
+        with open(ruta_archivo_csv, mode='r', encoding='latin-1') as f:
             datos_csv_texto = f.read()
         return datos_csv_texto
     except Exception as e:
@@ -77,27 +77,51 @@ def procesar_datos_galicia():
         lista_de_filas = list(lector_csv)
 
         for fila in lista_de_filas:
-            nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
-            direccion = limpiar_texto(fila.get('ENDEREZO'))
-            código_postal = fila.get('CÓDIGO POSTAL')
-            localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
-            horario = limpiar_texto(fila.get('HORARIO'))
-            contacto_tel, contacto_correo = limpiar_texto(fila.get('TELÉFONO')), limpiar_texto(fila.get('CORREO ELECTRÓNICO'))
-            url = fila.get('SOLITITUDE DE CITA PREVIA')
-            provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
 
-            coordenadas_str = fila.get('COORDENADAS GMAPS')
-            latitud, longitud = convertir_coordenadas(coordenadas_str)
+            provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
+            localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
+
+            if not provincia_nombre or not localidad_nombre:
+                print(f"Fila omitida por falta de datos de provincia o localidad: {fila}")
+                continue
 
             provincia_id = get_or_create_provincia(cur, provincia_nombre)
             localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
 
+            nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
+            tipo_estacion = 'Estación_fija'  # Dato fijo para todas las estaciones de Galicia
+            direccion = limpiar_texto(fila.get('ENDEREZO'))
+            codigo_postal = fila.get('CÓDIGO POSTAL')
+
+            coordenadas_str = fila.get('COORDENADAS GMAPS')
+            lat_str, lon_str = None, None
+            if coordenadas_str:
+                try:
+                    lat_str, lon_str = coordenadas_str.split(',')
+                except ValueError:
+                    print(f'Formato de coordenadas inválido: {coordenadas_str}')
+            latitud = convertir_coordenadas(lat_str)
+            longitud = convertir_coordenadas(lon_str)
+            
+            horario = limpiar_texto(fila.get('HORARIO'))
+
+            tel = limpiar_texto(fila.get('TELÉFONO'))
+            email = limpiar_texto(fila.get('CORREO ELECTRÓNICO'))
+            contacto = f"Tel: {tel} " if tel else ""
+            if email:
+                if contacto:
+                    contacto += f"| Email: {email}"
+                else:
+                    contacto = f"Email: {email}"
+            
+            url = limpiar_texto(fila.get('SOLICITUDE DE CITA PREVIA'))
+            
             cur.execute("""
-                INSERT INTO estaciones_itv 
-                (nombre, direccion, codigo_postal, localidad_id, horario, contacto_tel, contacto_correo, url, latitud, longitud) 
+                INSERT INTO Estacion 
+                (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (nombre_estacion, direccion, código_postal, localidad_id, horario, contacto_tel, contacto_correo, url, latitud, longitud)
+                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
             )
         conn.commit()
 
