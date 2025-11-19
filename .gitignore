@@ -4,6 +4,8 @@ __pychache__/
 *.pyo
 *.pyd
 
+.venv/
+venv/
 
 
 

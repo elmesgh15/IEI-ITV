@@ -161,6 +161,9 @@ def procesar_datos_catalunya():
             cur.close()
         if conn:
             conn.close()
+
+if __name__ == "__main__":
+    procesar_datos_catalunya()
     
 
 
