@@ -1,11 +1,18 @@
 import json
 import psycopg2
-import requests
 import time
 import os
 import sys
 
-# Ajuste para permitir la importación de módulos hermanos si se ejecuta como script
+# Importaciones de Selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+
+# Ajuste para permitir la importación de módulos hermanos
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from backend.almacen.database import conectar
@@ -16,51 +23,75 @@ def limpiar_texto(texto):
         return texto.strip()
     return texto
 
-def obtener_coordenadas(direccion, municipio, provincia):
-    """
-    Obtiene latitud y longitud consultando la URL solicitada: coordenadas-gps.com.
-    """
-    # Construimos la dirección de búsqueda
-    busqueda = f"{direccion}, {municipio}, {provincia}, España"
+def iniciar_driver():
+    """Configura e inicia el navegador Chrome con Selenium."""
+    print("Iniciando navegador Selenium...")
+    chrome_options = Options()
+    # Comenta la siguiente línea si quieres ver el navegador trabajando (útil para depurar)
+    # chrome_options.add_argument("--headless") 
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--log-level=3")
     
-    url = "https://www.coordenadas-gps.com" 
-    
-    params = {
-        'q': busqueda,
-        'format': 'json'
-    }
-    
-    headers = {
-        'User-Agent': 'ProyectoIntegracionITV/1.0' 
-    }
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
 
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                lat = None
-                lon = None
-                
-                if isinstance(data, list) and len(data) > 0:
-                    item = data[0]
-                    lat = float(item.get('lat', item.get('latitude', 0)))
-                    lon = float(item.get('lon', item.get('longitude', 0)))
-                elif isinstance(data, dict):
-                    lat = float(data.get('lat', data.get('latitude', 0)))
-                    lon = float(data.get('lon', data.get('longitude', 0)))
-                    
-                if lat and lon:
-                    return lat, lon
-            except json.JSONDecodeError:
-                pass
-        
-        time.sleep(1) 
-        
-    except Exception as e:
-        print(f"Error al geocodificar '{busqueda}': {e}")
+def obtener_coordenadas(driver, direccion, municipio, provincia):
+    """
+    Usa Selenium para obtener coordenadas desde coordenadas-gps.com
+    """
+    busqueda = f"{direccion}, {municipio}, {provincia}, España"
+    url = "https://www.coordenadas-gps.com"
     
+    try:
+        # Navegar a la web si no estamos ya allí (para reutilizar sesión)
+        if driver.current_url != url and not driver.current_url.startswith(url):
+            driver.get(url)
+            # Aceptamos cookies si aparecen (ajustar selector según la web)
+            try:
+                boton_cookies = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Aceptar') or contains(text(), 'Consent')]"))
+                )
+                boton_cookies.click()
+            except:
+                pass # Si no hay banner o falla, seguimos
+
+        # 1. Encontrar el campo de dirección y limpiarlo
+        input_address = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "address"))
+        )
+        input_address.clear()
+        input_address.send_keys(busqueda)
+
+        # 2. Encontrar el botón de búsqueda y hacer click
+        # En esta web suele ser un botón que dice "Obtener Coordenadas GPS"
+        boton_buscar = driver.find_element(By.XPATH, "//button[contains(@class, 'btn-primary') and contains(text(), 'GPS')]")
+        boton_buscar.click()
+
+        # 3. Esperar a que los campos de latitud/longitud tengan valor
+        # Un truco es esperar un poco o esperar a que el valor cambie si ya había uno.
+        # Aquí esperaremos a que el input latitude sea visible y tenga valor.
+        time.sleep(1.5) # Pausa para dejar que el JS de la web procese (ajustar según velocidad de red)
+        
+        lat_input = driver.find_element(By.ID, "latitude")
+        lon_input = driver.find_element(By.ID, "longitude")
+        
+        lat_texto = lat_input.get_attribute("value")
+        lon_texto = lon_input.get_attribute("value")
+
+        if lat_texto and lon_texto:
+            try:
+                return float(lat_texto), float(lon_texto)
+            except ValueError:
+                return None, None
+
+    except (TimeoutException, NoSuchElementException) as e:
+        print(f"Selenium no pudo encontrar coordenadas para: {busqueda}. Error: {e}")
+        # Opcional: Recargar página si falla mucho
+        # driver.refresh()
+    except Exception as e:
+        print(f"Error general Selenium: {e}")
+
     return None, None
 
 def get_or_create_provincia(cursor, nombre_provincia):
@@ -82,55 +113,57 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         return cursor.fetchone()[0]
 
 def leer_datos_cv():
-    base_dir = os.path.dirname(os.path.abspath(__file__)) 
-    ruta_archivo_json = os.path.join(base_dir, '..', 'datos', 'estaciones.json') 
+    """Lee el archivo JSON correctamente."""
+    # Ruta dinámica para encontrar el archivo JSON
+    ruta_archivo_json = "datos/estaciones.json"
     
-    print(f"Buscando archivo en: {ruta_archivo_json}")
-    
+    if not os.path.exists(ruta_archivo_json):
+        base_dir = os.path.dirname(os.path.abspath(__file__)) 
+        ruta_archivo_json = os.path.join(base_dir, '..', '..', 'datos', 'estaciones.json')
+
+    print(f"Leyendo archivo desde: {os.path.abspath(ruta_archivo_json)}")
+
     try:
         with open(ruta_archivo_json, mode='r', encoding='utf-8') as f:
+            # IMPORTANTE: Usar json.load para obtener una LISTA, no un STRING
             datos = json.load(f)
         return datos
     except FileNotFoundError:
-        print(f"ERROR: No se encuentra el archivo en {ruta_archivo_json}.")
+        print(f"ERROR: No se encuentra el archivo 'estaciones.json'.")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON inválido: {e}")
         return None
     except Exception as e:
-        print(f"Error al leer el archivo JSON: {e}")
-        return None
-    
-def extraer_datos_temporalmente():
-    ruta_archivo_json = "datos/estaciones.json"
-    try:
-        with open(ruta_archivo_json, mode='r', encoding='latin-1') as f:
-            datos_json_texto = f.read()
-        return datos_json_texto
-    except Exception as e:
-        print(f"Error al leer el archivo json: {e}")
+        print(f"Error al leer archivo: {e}")
         return None
 
 def normalizar_tipo_estacion(tipo_origen):
-    if not tipo_origen:
-        return "Otros"
-    
+    if not tipo_origen: return "Otros"
     tipo = str(tipo_origen).lower()
-    if "fija" in tipo:
-        return "Estación_fija"
-    elif "móvil" in tipo or "movil" in tipo:
-        return "Estación_móvil"
-    else:
-        return "Otros"
+    if "fija" in tipo: return "Estación_fija"
+    elif "móvil" in tipo or "movil" in tipo: return "Estación_móvil"
+    else: return "Otros"
 
 def procesar_datos_cv():
-    datos_json = extraer_datos_temporalmente()
+    print("Iniciando proceso ETL con Selenium...")
     
-    # Inicializamos contadores
-    registros_insertados = 0
-    registros_omitidos = 0
+    # 1. Cargar datos
+    datos_json = leer_datos_cv()
     
-    if not datos_json:
-        print("No se pudieron cargar los datos.")
+    if datos_json is None:
+        print("Abortando: No hay datos.")
         return 0, 0
 
+    if not isinstance(datos_json, list):
+        print(f"Error de formato: Se esperaba una lista, se recibió {type(datos_json)}")
+        return 0, 0
+
+    # 2. Iniciar Driver (Una sola vez)
+    driver = iniciar_driver()
+
+    registros_insertados = 0
+    registros_omitidos = 0
     conn = None
     cur = None
     
@@ -138,35 +171,37 @@ def procesar_datos_cv():
         conn = conectar()
         cur = conn.cursor()
         
-        total_registros = len(datos_json)
-        print(f"Iniciando procesamiento de {total_registros} registros CV...")
+        total = len(datos_json)
+        print(f"Procesando {total} estaciones...")
 
-        for item in datos_json:
-            # --- Validación de Datos ---
+        for i, item in enumerate(datos_json):
+            # --- Validación ---
             provincia_nombre = limpiar_texto(item.get('PROVINCIA'))
             localidad_nombre = limpiar_texto(item.get('MUNICIPIO'))
             
-            # Si faltan datos críticos, omitimos el registro y aumentamos el contador de fallos
             if not provincia_nombre or not localidad_nombre:
-                # print(f"Registro omitido (faltan datos): Estación {item.get('Nº ESTACIÓN')}")
                 registros_omitidos += 1
                 continue
 
-            # --- Procesamiento e Inserción ---
             try:
+                # --- Procesamiento ---
                 provincia_id = get_or_create_provincia(cur, provincia_nombre)
                 localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
 
                 nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
                 tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
                 direccion = limpiar_texto(item.get('DIRECCIÓN'))
+                
                 cp_raw = item.get('C.POSTAL')
                 codigo_postal = str(cp_raw).zfill(5) if cp_raw and str(cp_raw).strip() else ""
+                
                 horario = limpiar_texto(item.get('HORARIOS'))
                 contacto = limpiar_texto(item.get('CORREO'))
                 url_web = "" 
 
-                latitud, longitud = obtener_coordenadas(direccion, localidad_nombre, provincia_nombre)
+                # --- Selenium para Coordenadas ---
+                print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({localidad_nombre})...", end="\r")
+                latitud, longitud = obtener_coordenadas(driver, direccion, localidad_nombre, provincia_nombre)
 
                 cur.execute("""
                     INSERT INTO Estacion 
@@ -175,39 +210,30 @@ def procesar_datos_cv():
                     """,
                     (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url_web, localidad_id)
                 )
-                
-                # Si llegamos aquí sin error, contamos como éxito
                 registros_insertados += 1
                 
-                # Feedback visual opcional
-                # print(f"Insertada: {nombre_estacion} ({localidad_nombre})")
-
             except Exception as e_row:
-                print(f"Error al procesar fila {item.get('Nº ESTACIÓN')}: {e_row}")
+                print(f"\nError en fila {i}: {e_row}")
                 registros_omitidos += 1
 
         conn.commit()
-        
-        print("\n--- Resumen de Carga CV ---")
-        print(f"Total registros leídos: {total_registros}")
-        print(f"Insertados correctamente: {registros_insertados}")
-        print(f"No introducidos (omitidos/error): {registros_omitidos}")
-        print("---------------------------\n")
+        print(f"\n\n--- Resumen Final ---")
+        print(f"Insertados: {registros_insertados}")
+        print(f"Fallidos/Omitidos: {registros_omitidos}")
 
         return registros_insertados, registros_omitidos
 
-    except (Exception, psycopg2.Error) as error:
-        print(f"Error crítico de base de datos: {error}")
-        if conn:
-            conn.rollback()
-        return 0, len(datos_json) # Si falla el commit global, todo cuenta como no insertado
+    except Exception as error:
+        print(f"Error crítico: {error}")
+        if conn: conn.rollback()
+        return 0, 0
 
     finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
-        print("Conexión cerrada.")
+        # Cerrar navegador y base de datos
+        if driver: driver.quit()
+        if cur: cur.close()
+        if conn: conn.close()
+        print("Recursos liberados.")
 
 if __name__ == "__main__":
     procesar_datos_cv()
