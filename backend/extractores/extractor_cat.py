@@ -47,7 +47,7 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         return cursor.fetchone()[0]
 
 def extraer_datos_temporalmente():
-    ruta_archivo_xml = "datos/ITV-CAT.xml"
+    ruta_archivo_xml = "backend/datos_nuevos/ITV-CAT.xml"
     try:
         with open(ruta_archivo_xml, mode='r', encoding='utf-8') as f:
             datos_xml_texto = f.read()

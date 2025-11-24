@@ -113,29 +113,26 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         return cursor.fetchone()[0]
 
 def leer_datos_cv():
-    """Lee el archivo JSON correctamente."""
-    # Ruta dinámica para encontrar el archivo JSON
-    ruta_archivo_json = "datos_nuevos/estaciones.json"
+    # Es recomendable usar os.path para evitar errores de ruta, 
+    # pero si estás en la raíz, esto funciona:
+    ruta_archivo_json = "backend/datos_nuevos/estaciones.json"
     
-    if not os.path.exists(ruta_archivo_json):
-        base_dir = os.path.dirname(os.path.abspath(__file__)) 
-        ruta_archivo_json = os.path.join(base_dir, '..', '..', 'datos_nuevos', 'estaciones.json')
-
-    print(f"Leyendo archivo desde: {os.path.abspath(ruta_archivo_json)}")
-
     try:
+        print(f"[Debug] Intentando leer: {ruta_archivo_json}")
+        # 1. Los JSON suelen estar en 'utf-8'
         with open(ruta_archivo_json, mode='r', encoding='utf-8') as f:
-            # IMPORTANTE: Usar json.load para obtener una LISTA, no un STRING
-            datos = json.load(f)
-        return datos
+            # 2. Usamos json.load para parsearlo automáticamente a una lista/diccionario
+            datos_json = json.load(f)
+        return datos_json
+        
     except FileNotFoundError:
-        print(f"ERROR: No se encuentra el archivo 'estaciones.json'.")
+        print(f"Error: No se encuentra el archivo en {ruta_archivo_json}")
         return None
     except json.JSONDecodeError as e:
-        print(f"ERROR: JSON inválido: {e}")
+        print(f"Error: El archivo no es un JSON válido. {e}")
         return None
     except Exception as e:
-        print(f"Error al leer archivo: {e}")
+        print(f"Error inesperado: {e}")
         return None
 
 def normalizar_tipo_estacion(tipo_origen):
