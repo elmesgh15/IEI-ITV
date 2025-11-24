@@ -115,11 +115,11 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
 def leer_datos_cv():
     """Lee el archivo JSON correctamente."""
     # Ruta dinámica para encontrar el archivo JSON
-    ruta_archivo_json = "datos/estaciones.json"
+    ruta_archivo_json = "datos_nuevos/estaciones.json"
     
     if not os.path.exists(ruta_archivo_json):
         base_dir = os.path.dirname(os.path.abspath(__file__)) 
-        ruta_archivo_json = os.path.join(base_dir, '..', '..', 'datos', 'estaciones.json')
+        ruta_archivo_json = os.path.join(base_dir, '..', '..', 'datos_nuevos', 'estaciones.json')
 
     print(f"Leyendo archivo desde: {os.path.abspath(ruta_archivo_json)}")
 
@@ -197,7 +197,7 @@ def procesar_datos_cv():
                 
                 horario = limpiar_texto(item.get('HORARIOS'))
                 contacto = limpiar_texto(item.get('CORREO'))
-                url_web = "" 
+                url_web = "www.sitval.com" 
 
                 # --- Selenium para Coordenadas ---
                 print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({localidad_nombre})...", end="\r")
