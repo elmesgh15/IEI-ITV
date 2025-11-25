@@ -65,7 +65,7 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
 def extraer_datos_temporalmente():
     ruta_archivo_csv = "backend/datos_nuevos/Estacions_ITV.csv"
     try:
-        with open(ruta_archivo_csv, mode='r', encoding='latin-1') as f:
+        with open(ruta_archivo_csv, mode='r', encoding='utf-8') as f:
             datos_csv_texto = f.read()
         return datos_csv_texto
     except Exception as e:
