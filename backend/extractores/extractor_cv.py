@@ -27,8 +27,7 @@ def iniciar_driver():
     """Configura e inicia el navegador Chrome con Selenium."""
     print("Iniciando navegador Selenium...")
     chrome_options = Options()
-    # Comenta la siguiente línea si quieres ver el navegador trabajando (útil para depurar)
-    # chrome_options.add_argument("--headless") 
+    # chrome_options.add_argument("--headless") # Descomentar para modo sin cabeza
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--log-level=3")
@@ -44,34 +43,26 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
     url = "https://www.coordenadas-gps.com"
     
     try:
-        # Navegar a la web si no estamos ya allí (para reutilizar sesión)
         if driver.current_url != url and not driver.current_url.startswith(url):
             driver.get(url)
-            # Aceptamos cookies si aparecen (ajustar selector según la web)
             try:
                 boton_cookies = WebDriverWait(driver, 3).until(
                     EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Aceptar') or contains(text(), 'Consent')]"))
                 )
                 boton_cookies.click()
             except:
-                pass # Si no hay banner o falla, seguimos
+                pass 
 
-        # 1. Encontrar el campo de dirección y limpiarlo
         input_address = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "address"))
         )
         input_address.clear()
         input_address.send_keys(busqueda)
 
-        # 2. Encontrar el botón de búsqueda y hacer click
-        # En esta web suele ser un botón que dice "Obtener Coordenadas GPS"
         boton_buscar = driver.find_element(By.XPATH, "//button[contains(@class, 'btn-primary') and contains(text(), 'GPS')]")
         boton_buscar.click()
 
-        # 3. Esperar a que los campos de latitud/longitud tengan valor
-        # Un truco es esperar un poco o esperar a que el valor cambie si ya había uno.
-        # Aquí esperaremos a que el input latitude sea visible y tenga valor.
-        time.sleep(1.5) # Pausa para dejar que el JS de la web procese (ajustar según velocidad de red)
+        time.sleep(1.5) 
         
         lat_input = driver.find_element(By.ID, "latitude")
         lon_input = driver.find_element(By.ID, "longitude")
@@ -87,8 +78,6 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
 
     except (TimeoutException, NoSuchElementException) as e:
         print(f"Selenium no pudo encontrar coordenadas para: {busqueda}. Error: {e}")
-        # Opcional: Recargar página si falla mucho
-        # driver.refresh()
     except Exception as e:
         print(f"Error general Selenium: {e}")
 
@@ -113,18 +102,12 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         return cursor.fetchone()[0]
 
 def leer_datos_cv():
-    # Es recomendable usar os.path para evitar errores de ruta, 
-    # pero si estás en la raíz, esto funciona:
     ruta_archivo_json = "backend/datos_nuevos/estaciones.json"
-    
     try:
         print(f"[Debug] Intentando leer: {ruta_archivo_json}")
-        # 1. Los JSON suelen estar en 'utf-8'
         with open(ruta_archivo_json, mode='r', encoding='utf-8') as f:
-            # 2. Usamos json.load para parsearlo automáticamente a una lista/diccionario
             datos_json = json.load(f)
         return datos_json
-        
     except FileNotFoundError:
         print(f"Error: No se encuentra el archivo en {ruta_archivo_json}")
         return None
@@ -172,11 +155,17 @@ def procesar_datos_cv():
         print(f"Procesando {total} estaciones...")
 
         for i, item in enumerate(datos_json):
-            # --- Validación ---
+            # --- MODIFICACIÓN AQUÍ ---
             provincia_nombre = limpiar_texto(item.get('PROVINCIA'))
             localidad_nombre = limpiar_texto(item.get('MUNICIPIO'))
             
+            # Si no hay municipio, usamos la provincia como municipio
+            if not localidad_nombre and provincia_nombre:
+                localidad_nombre = provincia_nombre
+            
+            # Si después de esto sigue faltando alguno (ej. falta provincia), entonces sí omitimos
             if not provincia_nombre or not localidad_nombre:
+                print(f"Omitiendo registro {i}: Faltan datos geográficos clave.")
                 registros_omitidos += 1
                 continue
 
