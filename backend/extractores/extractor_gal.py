@@ -2,8 +2,8 @@ import psycopg2
 import csv
 import re
 from io import StringIO
+# Asegúrate de que la ruta de importación sea correcta según tu estructura de carpetas
 from backend.almacen.database import conectar
-
 
 def limpiar_texto(texto):
     if texto:
@@ -73,14 +73,22 @@ def extraer_datos_temporalmente():
         return None
     
 def procesar_datos_galicia():
+    print("Iniciando extractor de Galicia...")
+
     # Extraer datos CSV
     datos_csv_galicia = extraer_datos_temporalmente()
     if not datos_csv_galicia:
         print("No se pudieron extraer los datos.")
         return
+
     # Establecer conexión a la base de datos
     conn = None
     cur = None
+    
+    # Contadores
+    registros_insertados = 0
+    registros_omitidos = 0
+
     try:
         conn = conectar()
         cur = conn.cursor()
@@ -88,70 +96,83 @@ def procesar_datos_galicia():
         # Leer datos CSV
         lector_csv = csv.DictReader(StringIO(datos_csv_galicia), delimiter=';')
         lista_de_filas = list(lector_csv)
+        
+        print(f"Procesando {len(lista_de_filas)} registros...")
 
         for fila in lista_de_filas:
+            try:
+                # --- Validación Básica ---
+                provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
+                localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
 
-            provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
-            localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
+                if not provincia_nombre or not localidad_nombre:
+                    print(f"Fila omitida por falta de datos clave (Provincia/Localidad): {fila}")
+                    registros_omitidos += 1
+                    continue
 
-            if not provincia_nombre or not localidad_nombre:
-                print(f"Fila omitida por falta de datos de provincia o localidad: {fila}")
-                continue
+                # --- Procesamiento ---
+                provincia_id = get_or_create_provincia(cur, provincia_nombre)
+                localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
 
-            provincia_id = get_or_create_provincia(cur, provincia_nombre)
-            localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
+                nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
+                tipo_estacion = 'Estación_fija'
+                direccion = limpiar_texto(fila.get('ENDEREZO'))
+                codigo_postal = fila.get('CÓDIGO POSTAL')
 
-            nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
-            tipo_estacion = 'Estación_fija'  # Dato fijo para todas las estaciones de Galicia
-            direccion = limpiar_texto(fila.get('ENDEREZO'))
-            codigo_postal = fila.get('CÓDIGO POSTAL')
+                coordenadas_str = fila.get('COORDENADAS GMAPS')
+                latitud = None
+                longitud = None
+                
+                if coordenadas_str and ',' in coordenadas_str:
+                    partes = coordenadas_str.split(',')
+                    if len(partes) == 2:
+                        latitud = convertir_coordenadas(partes[0])
+                        longitud = convertir_coordenadas(partes[1])
+                        
+                        if latitud is None or longitud is None:
+                            print(f"⚠️ Aviso: Fallo al convertir coords: {coordenadas_str}")
+                
+                horario = limpiar_texto(fila.get('HORARIO'))
 
-            coordenadas_str = fila.get('COORDENADAS GMAPS')
-            latitud = None
-            longitud = None
-            
-            if coordenadas_str and ',' in coordenadas_str:
-                # Dividimos por la coma
-                partes = coordenadas_str.split(',')
-                if len(partes) == 2:
-                    # Usamos la nueva función robusta
-                    latitud = convertir_coordenadas(partes[0])
-                    longitud = convertir_coordenadas(partes[1])
-                    
-                    # DEBUG: Si sale None, imprimimos para ver por qué falla
-                    if latitud is None or longitud is None:
-                        print(f"⚠️ Aviso: Fallo al convertir coords: {coordenadas_str}")
-            
-            horario = limpiar_texto(fila.get('HORARIO'))
+                tel = limpiar_texto(fila.get('TELÉFONO'))
+                email = limpiar_texto(fila.get('CORREO ELECTRÓNICO'))
+                contacto = f"Tel: {tel} " if tel else ""
+                if email:
+                    if contacto:
+                        contacto += f"| Email: {email}"
+                    else:
+                        contacto = f"Email: {email}"
+                
+                url = limpiar_texto(fila.get('SOLICITUDE DE CITA PREVIA'))
+                
+                # --- Inserción ---
+                cur.execute("""
+                    INSERT INTO Estacion 
+                    (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
+                )
+                
+                registros_insertados += 1
 
-            tel = limpiar_texto(fila.get('TELÉFONO'))
-            email = limpiar_texto(fila.get('CORREO ELECTRÓNICO'))
-            contacto = f"Tel: {tel} " if tel else ""
-            if email:
-                if contacto:
-                    contacto += f"| Email: {email}"
-                else:
-                    contacto = f"Email: {email}"
-            
-            url = limpiar_texto(fila.get('SOLICITUDE DE CITA PREVIA'))
-            
-            cur.execute("""
-                INSERT INTO Estacion 
-                (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
-            )
+            except Exception as e_fila:
+                print(f"Error procesando fila {fila}: {e_fila}")
+                registros_omitidos += 1
+
         conn.commit()
+        
+        # --- Resumen Final ---
+        print("\n--- Resumen Final Galicia ---")
+        print(f"Insertados correctamente: {registros_insertados}")
+        print(f"Omitidos / Fallidos: {registros_omitidos}")
 
     except (Exception, psycopg2.Error) as error:
-        print(f"Error durante el proceso ETL: {error}")
-        # MEJORA: Rollback en caso de error
+        print(f"Error crítico durante el proceso ETL: {error}")
         if conn:
             conn.rollback()
 
     finally:
-    # MEJORA: Asegurar que la conexión siempre se cierre
         if cur:
             cur.close()
         if conn:
@@ -161,9 +182,3 @@ def procesar_datos_galicia():
 
 if __name__ == "__main__":
     procesar_datos_galicia()
-
-        
-
-
-
-    
