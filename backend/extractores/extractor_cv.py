@@ -1,34 +1,31 @@
 import json
-import psycopg2
+#import psycopg2
 import time
 import os
 import sys
 
-# Importaciones de Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from backend.extractores.filtros import Validate
-
-# Ajuste para permitir la importación de módulos hermanos
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from backend.almacen.database import conectar
+from backend.extractores.filtros import Validate
+
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+
 
 def limpiar_texto(texto):
-    """Limpia espacios y normaliza el texto."""
     if isinstance(texto, str):
         return texto.strip()
     return texto
 
 def iniciar_driver():
-    """Configura e inicia el navegador Chrome con Selenium."""
     print("Iniciando navegador Selenium...")
     chrome_options = Options()
-    # chrome_options.add_argument("--headless") # Descomentar para modo sin cabeza
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--log-level=3")
@@ -37,9 +34,6 @@ def iniciar_driver():
     return driver
 
 def obtener_coordenadas(driver, direccion, municipio, provincia):
-    """
-    Usa Selenium para obtener coordenadas desde coordenadas-gps.com
-    """
     busqueda = f"{direccion}, {municipio}, {provincia}, España"
     url = "https://www.coordenadas-gps.com"
     
@@ -105,7 +99,6 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
 def leer_datos_cv():
     ruta_archivo_json = "backend/datos_nuevos/estaciones.json"
     try:
-        print(f"[Debug] Intentando leer: {ruta_archivo_json}")
         with open(ruta_archivo_json, mode='r', encoding='utf-8') as f:
             datos_json = json.load(f)
         return datos_json
@@ -126,31 +119,36 @@ def normalizar_tipo_estacion(tipo_origen):
     elif "móvil" in tipo or "movil" in tipo: return "Estación_móvil"
     else: return "Otros"
 
+
+
+
+
 def procesar_datos_cv():
-    print("Iniciando proceso ETL con Selenium...")
-    
-    # 1. Cargar datos
+    print("Iniciando extractor de la Comunidad Valenciana...")
+
     datos_json = leer_datos_cv()
     
-    if datos_json is None:
-        print("Abortando: No hay datos.")
-        return 0, 0
+    if not datos_json:
+        print("No se pudieron extraer los datos.")
+        return
 
-    if not isinstance(datos_json, list):
-        print(f"Error de formato: Se esperaba una lista, se recibió {type(datos_json)}")
-        return 0, 0
-
-    # 2. Iniciar Driver (Una sola vez)
+    #if not isinstance(datos_json, list):
+        #print(f"Error de formato: Se esperaba una lista, se recibió {type(datos_json)}")
+        #return 0, 0
+    
     driver = iniciar_driver()
+
+    conn = None
+    cur = None
+    
+    conn = conectar()
+    cur = conn.cursor()
+    filtro = Validate(cur)
 
     registros_insertados = 0
     registros_omitidos = 0
-    conn = None
-    cur = None
-    filtro = Validate(cur)
+
     try:
-        conn = conectar()
-        cur = conn.cursor()
         
         total = len(datos_json)
         print(f"Procesando {total} estaciones...")

@@ -1,8 +1,8 @@
-import psycopg2
+#import psycopg2
 import csv
 import re
 from io import StringIO
-# Asegúrate de que la ruta de importación sea correcta según tu estructura de carpetas
+
 from backend.almacen.database import conectar
 from backend.extractores.filtros import Validate
 
@@ -17,14 +17,11 @@ def convertir_coordenadas(coord_str):
     
     coord_limpia = coord_str.strip()
 
-    # --- CASO 1: Formato Decimal Directo ---
     try:
-        # Si Python puede convertirlo directamente a float, ¡ya hemos terminado!
         return float(coord_limpia)
     except ValueError:
         pass
 
-    # --- CASO 2: Formato Grados + Minutos ---
     patron = re.compile(r"(-?\d+)[°º\s]+(\d+\.?\d*)")
     match = patron.search(coord_limpia)
     
@@ -33,7 +30,6 @@ def convertir_coordenadas(coord_str):
             grados = float(match.group(1))
             minutos = float(match.group(2))
             
-            # Fórmula: Grados + (Minutos / 60)
             if grados < 0:
                 decimal = grados - (minutos / 60)
             else:
@@ -63,7 +59,7 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         cursor.execute("INSERT INTO Localidad (nombre, codigo_provincia) VALUES (%s, %s) RETURNING codigo", (nombre_localidad, provincia_id))
         return cursor.fetchone()[0]
     
-def extraer_datos_temporalmente():
+def leer_datos_gal():
     ruta_archivo_csv = "backend/datos_nuevos/Estacions_ITV.csv"
     try:
         with open(ruta_archivo_csv, mode='r', encoding='utf-8') as f:
@@ -73,29 +69,32 @@ def extraer_datos_temporalmente():
         print(f"Error al leer el archivo CSV: {e}")
         return None
     
-def procesar_datos_galicia():
+
+
+
+
+def procesar_datos_gal():
     print("Iniciando extractor de Galicia...")
 
-    # Extraer datos CSV
-    datos_csv_galicia = extraer_datos_temporalmente()
+    datos_csv_galicia = leer_datos_gal()
+    
     if not datos_csv_galicia:
         print("No se pudieron extraer los datos.")
         return
 
-    # Establecer conexión a la base de datos
     conn = None
     cur = None
 
-    
+    conn = conectar()
+    cur = conn.cursor()
+    filtro = Validate(cur)
     
     # Contadores
     registros_insertados = 0
     registros_omitidos = 0
 
     try:
-        conn = conectar()
-        cur = conn.cursor()
-        filtro = Validate(cur)
+        
         # Leer datos CSV
         lector_csv = csv.DictReader(StringIO(datos_csv_galicia), delimiter=';')
         lista_de_filas = list(lector_csv)
@@ -211,4 +210,4 @@ def procesar_datos_galicia():
     
 
 if __name__ == "__main__":
-    procesar_datos_galicia()
+    procesar_datos_gal()
