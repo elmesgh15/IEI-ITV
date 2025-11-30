@@ -81,7 +81,7 @@ def procesar_datos_cat():
     cur = conn.cursor()
     filtro = Validate(cur)
 
-    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0}
+    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0}
 
     try:
 
@@ -90,92 +90,94 @@ def procesar_datos_cat():
         print(f"Procesando {len(lista_estaciones)} estaciones encontradas en el XML...")
         
         contador = 0
-        
+
         for i, item in enumerate(lista_estaciones):
 
             nombre_prov = get_texto_from_tag(item, 'serveis_territorials')
-            
-            # Mapeo: L.nombre <- municipi
-            nombre_loc = get_texto_from_tag(item, 'municipi')
-            nombre_estacion = get_texto_from_tag(item, 'denominaci')
-
-            if not nombre_prov or not nombre_loc:
-                continue # Saltamos si faltan datos clave
-
             nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
 
-            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                print(f"Descartado (Duplicado): {nombre_estacion}")
-                contadores['descartados'] += 1
-                continue
+            nombre_loc = get_texto_from_tag(item, 'municipi')
 
-            if not filtro.es_provincia_real(nombre_prov_final):
-                # Opcional: Imprimir para depurar
-                print(f"Provincia no válida: {nombre_prov}")
-                contadores['descartados'] += 1
-                continue
+            nombre_estacion = get_texto_from_tag(item, 'denominaci')
 
-            # Obtener IDs
-            id_prov = get_or_create_provincia(cur, nombre_prov_final)
-            id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
-
-            # Mapeo: E.tipo <- Fijo por defecto
             tipo_estacion = "Estación_fija"
 
-            # Mapeo: E.direccion <- adre_a
             direccion = get_texto_from_tag(item, 'adre_a')
 
-            # Mapeo: E.codigo_postal <- cp
             cp_raw = get_texto_from_tag(item, 'cp')
             codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
 
+            horario = get_texto_from_tag(item, 'horari_de_servei')
+
+            contacto = get_texto_from_tag(item, 'correu_electr_nic')
+
+            lat_raw = get_texto_from_tag(item, 'lat')
+            latitud = convertir_coordenadas(lat_raw)
+
+            long_raw = get_texto_from_tag(item, 'long')
+            longitud = convertir_coordenadas(long_raw)
+
+            tag_web = item.find('web')
+            url = tag_web.get('url')
+
+            if not nombre_prov or not nombre_loc:
+                #print(f"Descartado falta provincia/localiad: {nombre_estacion}")
+                contadores['descartados'] +=1
+                contadores['datos'] += 1
+                continue 
+
+            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                #print(f"Descartado (Duplicado): {nombre_estacion}")
+                contadores['descartados'] += 1
+                contadores['nombre'] += 1
+                continue
+
+            if not filtro.es_provincia_real(nombre_prov_final):
+                #print(f"Provincia no válida: {nombre_prov}")
+                contadores['descartados'] += 1
+                contadores['provincia'] += 1
+                continue
+
             if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                    print(f"Omitiendo registro : CP inválido para estación fija.")
-                    registros_omitidos += 1
+                    #print(f"Omitiendo registro : CP inválido para estación fija.")
+                    contadores['descartados'] += 1
+                    contadores['cp'] += 1
                     continue
+            
             if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
                 codigo_postal = ""
 
-            # Mapeo: E.horario <- horari_de_servei
-            horario = get_texto_from_tag(item, 'horari_de_servei')
-
-            # Mapeo: E.contacto <- correu_electr_nic
-            contacto = get_texto_from_tag(item, 'correu_electr_nic')
-
-            # Mapeo: Coordenadas <- lat, long (dividiendo por 1M)
-            lat_raw = get_texto_from_tag(item, 'lat')
-            long_raw = get_texto_from_tag(item, 'long')
-            
-            latitud = convertir_coordenadas(lat_raw)
-            longitud = convertir_coordenadas(long_raw)
-
             if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
+                #print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
                 contadores['descartados'] += 1
+                contadores['coordenadas'] += 1
                 continue
 
-            # Mapeo: E.url <- atributo 'url' dentro de la etiqueta <web>
-            # La etiqueta <web> se busca aparte para sacar su atributo
-            tag_web = item.find('web')
-            url = None
-            if tag_web is not None:
-                url = tag_web.get('url')
 
-            # --- 3. CARGAR ---
+            id_prov = get_or_create_provincia(cur, nombre_prov_final)
+            id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
+
             cur.execute("""
                 INSERT INTO Estacion 
-                (nombre, tipo, direccion, codigo_postal, longitud, latitud, 
-                 horario, contacto, url, codigo_localidad)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,
-                horario, contacto, url, id_loc
-            ))
+                (nombre, tipo, direccion, codigo_postal, longitud, latitud,horario, contacto, url, codigo_localidad)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,horario, contacto, url, id_loc)
+            )
             
-            contador += 1
+            contadores['insertados'] += 1
 
         conn.commit()
-        print(f"Éxito: Se han insertado {contador} estaciones de Cataluña.")
+
+        print("\n--- Resumen Final Cataluña ---")
+        print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
+        print(f"Se han descartado : {contadores['descartados']}.")
+        print(f"--- Resumen de los campos ({contadores['descartados']}) descartados. ---")
+        print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
+        print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
+        print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
+        print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
+        print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
+        print(f"--- Final ---")
 
     except Exception as e:
         print(f"Error en el proceso: {e}")
