@@ -1,10 +1,70 @@
+import unicodedata
 class Validate:
+
+    MAPA_PROVINCIAS = {
+        # Comunidad Valenciana
+        'valencia': 'Valencia',
+        'valència': 'Valencia',
+        'alicante': 'Alicante',
+        'alacant': 'Alicante',
+        'castellon': 'Castellón',
+        'castello': 'Castellón',
+        
+        # Galicia
+        'a coruna': 'A Coruña',
+        'la coruna': 'A Coruña',
+        'coruna': 'A Coruña',
+        'lugo': 'Lugo',
+        'ourense': 'Ourense',
+        'orense': 'Ourense',
+        'pontevedra': 'Pontevedra',
+        
+        # Cataluña
+        'barcelona': 'Barcelona',
+        'girona': 'Girona',
+        'gerona': 'Girona',
+        'lleida': 'Lleida',
+        'lerida': 'Lleida',
+        'tarragona': 'Tarragona',
+
+    }
+
     def __init__(self, cursor):
         """
         Inicializamos la clase con el cursor de la base de datos
         para poder hacer comprobaciones de duplicados.
         """
         self.cursor = cursor
+
+    def _normalizar_para_clave(self, texto):
+        """
+        Método interno para limpiar texto antes de comparar con la lista blanca.
+        Pasa a minúsculas y quita tildes.
+        Ej: "A Coruña" -> "a coruna"
+        """
+        if not texto:
+            return ""
+        texto = str(texto).lower().strip()
+        texto_norm = unicodedata.normalize('NFD', texto)
+        return ''.join(c for c in texto_norm if unicodedata.category(c) != 'Mn')
+    
+    def estandarizar_nombre_provincia(self, nombre_sucio):
+        """
+        Recibe un nombre (ej: "València", "Gerona") y devuelve el nombre oficial
+        configurado en el mapa (ej: "Valencia", "Girona").
+        Si no lo encuentra, devuelve el nombre original capitalizado.
+        """
+        if not nombre_sucio:
+            return None
+            
+        clave = self._normalizar_para_clave(nombre_sucio)
+        
+        # Buscamos en el diccionario
+        if clave in self.MAPA_PROVINCIAS:
+            return self.MAPA_PROVINCIAS[clave]
+            
+        # Si no está en el mapa, lo devolvemos "Bonito" (Primera letra mayúscula)
+        return nombre_sucio.title()
 
     def validar_ubicacion(self, provincia, localidad):
         """
@@ -28,7 +88,7 @@ class Validate:
             self.cursor.execute(query, (nombre_estacion,))
             return self.cursor.fetchone() is not None
         except Exception as e:
-            print(f"⚠️ Error verificando duplicado: {e}")
+            print(f"Error verificando duplicado: {e}")
             return False
 
     def validar_y_formatear_cp(self, cp_raw):
@@ -39,7 +99,7 @@ class Validate:
         - Retorna None si el CP no es válido.
         """
         if not cp_raw:
-            return None
+            return ""
         
         cp_str = str(cp_raw).strip()
         
@@ -52,7 +112,7 @@ class Validate:
             return cp_str
             
         # Cualquier otro caso se considera inválido
-        return None
+        return ""
 
     def tiene_coordenadas_validas(self, latitud, longitud):
         if latitud is None or longitud is None:
@@ -79,3 +139,15 @@ class Validate:
             
         except (ValueError, TypeError):
             return False
+        
+    def existe_provincia_en_bd(self, nombre_provincia):
+        if not nombre_provincia:
+            return False
+        query = "SELECT codigo FROM Provincia WHERE nombre = %s LIMIT 1"
+        self.cursor.execute(query, (nombre_provincia,))
+        return self.cursor.fetchone() is not None
+
+    def es_provincia_real(self, nombre_provincia):
+        if not nombre_provincia: return False
+        clave = self._normalizar_para_clave(nombre_provincia)
+        return clave in self.MAPA_PROVINCIAS

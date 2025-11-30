@@ -4,6 +4,7 @@ import re
 from io import StringIO
 # Asegúrate de que la ruta de importación sea correcta según tu estructura de carpetas
 from backend.almacen.database import conectar
+from backend.extractores.filtros import Validate
 
 def limpiar_texto(texto):
     if texto:
@@ -84,6 +85,8 @@ def procesar_datos_galicia():
     # Establecer conexión a la base de datos
     conn = None
     cur = None
+
+    
     
     # Contadores
     registros_insertados = 0
@@ -92,7 +95,7 @@ def procesar_datos_galicia():
     try:
         conn = conectar()
         cur = conn.cursor()
-
+        filtro = Validate(cur)
         # Leer datos CSV
         lector_csv = csv.DictReader(StringIO(datos_csv_galicia), delimiter=';')
         lista_de_filas = list(lector_csv)
@@ -102,8 +105,21 @@ def procesar_datos_galicia():
         for fila in lista_de_filas:
             try:
                 # --- Validación Básica ---
+                nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
                 provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
                 localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
+
+                nombre_prov_final = filtro.estandarizar_nombre_provincia(provincia_nombre)
+
+                if not filtro.es_provincia_real(nombre_prov_final):
+                    print(f"Provincia no válida: {provincia_nombre}")
+                    registros_omitidos += 1
+                    continue
+
+                if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                    print(f"Descartado (Duplicado): {nombre_estacion}")
+                    registros_omitidos += 1
+                    continue
 
                 if not provincia_nombre or not localidad_nombre:
                     print(f"Fila omitida por falta de datos clave (Provincia/Localidad): {fila}")
@@ -111,13 +127,22 @@ def procesar_datos_galicia():
                     continue
 
                 # --- Procesamiento ---
-                provincia_id = get_or_create_provincia(cur, provincia_nombre)
+                provincia_id = get_or_create_provincia(cur, nombre_prov_final)
                 localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
 
-                nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
+                
                 tipo_estacion = 'Estación_fija'
                 direccion = limpiar_texto(fila.get('ENDEREZO'))
-                codigo_postal = fila.get('CÓDIGO POSTAL')
+
+                cp_raw = fila.get('CÓDIGO POSTAL')
+                codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+
+                if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                    print(f"Omitiendo registro : CP inválido para estación fija.")
+                    registros_omitidos += 1
+                    continue
+                if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                    codigo_postal = ""
 
                 coordenadas_str = fila.get('COORDENADAS GMAPS')
                 latitud = None
@@ -130,7 +155,12 @@ def procesar_datos_galicia():
                         longitud = convertir_coordenadas(partes[1])
                         
                         if latitud is None or longitud is None:
-                            print(f"⚠️ Aviso: Fallo al convertir coords: {coordenadas_str}")
+                            print(f"Aviso: Fallo al convertir coords: {coordenadas_str}")
+
+                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                    print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
+                    registros_omitidos += 1
+                    continue
                 
                 horario = limpiar_texto(fila.get('HORARIO'))
 

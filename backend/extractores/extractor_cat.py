@@ -104,13 +104,21 @@ def procesar_datos_catalunya():
             if not nombre_prov or not nombre_loc:
                 continue # Saltamos si faltan datos clave
 
+            nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
+
             if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
                 print(f"Descartado (Duplicado): {nombre_estacion}")
                 contadores['descartados'] += 1
                 continue
 
+            if not filtro.es_provincia_real(nombre_prov_final):
+                # Opcional: Imprimir para depurar
+                print(f"Provincia no válida: {nombre_prov}")
+                contadores['descartados'] += 1
+                continue
+
             # Obtener IDs
-            id_prov = get_or_create_provincia(cur, nombre_prov)
+            id_prov = get_or_create_provincia(cur, nombre_prov_final)
             id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
 
             # Mapeo: E.tipo <- Fijo por defecto
@@ -122,6 +130,13 @@ def procesar_datos_catalunya():
             # Mapeo: E.codigo_postal <- cp
             cp_raw = get_texto_from_tag(estacion_xml, 'cp')
             codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+
+            if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                    print(f"Omitiendo registro : CP inválido para estación fija.")
+                    registros_omitidos += 1
+                    continue
+            if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                codigo_postal = ""
 
             # Mapeo: E.horario <- horari_de_servei
             horario = get_texto_from_tag(estacion_xml, 'horari_de_servei')

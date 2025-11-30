@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from backend.extractores.filtros import Validate
 
 # Ajuste para permitir la importación de módulos hermanos
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -62,7 +63,7 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
         boton_buscar = driver.find_element(By.XPATH, "//button[contains(@class, 'btn-primary') and contains(text(), 'GPS')]")
         boton_buscar.click()
 
-        time.sleep(1.5) 
+        time.sleep(5) 
         
         lat_input = driver.find_element(By.ID, "latitude")
         lon_input = driver.find_element(By.ID, "longitude")
@@ -146,7 +147,7 @@ def procesar_datos_cv():
     registros_omitidos = 0
     conn = None
     cur = None
-    
+    filtro = Validate(cur)
     try:
         conn = conectar()
         cur = conn.cursor()
@@ -154,10 +155,21 @@ def procesar_datos_cv():
         total = len(datos_json)
         print(f"Procesando {total} estaciones...")
 
+        
         for i, item in enumerate(datos_json):
             # --- MODIFICACIÓN AQUÍ ---
             provincia_nombre = limpiar_texto(item.get('PROVINCIA'))
             localidad_nombre = limpiar_texto(item.get('MUNICIPIO'))
+            
+
+            nombre_prov_final = filtro.estandarizar_nombre_provincia(provincia_nombre)
+
+            
+
+            if not filtro.es_provincia_real(nombre_prov_final):
+                print(f"Provincia no válida: {provincia_nombre}")
+                registros_omitidos += 1
+                continue
             
             # Si no hay municipio, usamos la provincia como municipio
             if not localidad_nombre and provincia_nombre:
@@ -168,18 +180,32 @@ def procesar_datos_cv():
                 print(f"Omitiendo registro {i}: Faltan datos geográficos clave.")
                 registros_omitidos += 1
                 continue
+            
 
             try:
                 # --- Procesamiento ---
-                provincia_id = get_or_create_provincia(cur, provincia_nombre)
+                provincia_id = get_or_create_provincia(cur, nombre_prov_final)
                 localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
-
                 nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
+
+                if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                    print(f"Descartado (Duplicado): {nombre_estacion}")
+                    registros_omitidos += 1
+                    continue
+                
                 tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
                 direccion = limpiar_texto(item.get('DIRECCIÓN'))
                 
                 cp_raw = item.get('C.POSTAL')
-                codigo_postal = str(cp_raw).zfill(5) if cp_raw and str(cp_raw).strip() else ""
+                codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+
+                if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                    print(f"Omitiendo registro {i}: CP inválido para estación fija.")
+                    registros_omitidos += 1
+                    continue
+                if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                    codigo_postal = ""
+                    
                 
                 horario = limpiar_texto(item.get('HORARIOS'))
                 contacto = limpiar_texto(item.get('CORREO'))
@@ -188,6 +214,11 @@ def procesar_datos_cv():
                 # --- Selenium para Coordenadas ---
                 print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({localidad_nombre})...", end="\r")
                 latitud, longitud = obtener_coordenadas(driver, direccion, localidad_nombre, provincia_nombre)
+
+                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                    print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
+                    registros_omitidos += 1
+                    continue
 
                 cur.execute("""
                     INSERT INTO Estacion 
@@ -206,6 +237,7 @@ def procesar_datos_cv():
         print(f"\n\n--- Resumen Final ---")
         print(f"Insertados: {registros_insertados}")
         print(f"Fallidos/Omitidos: {registros_omitidos}")
+        
 
         return registros_insertados, registros_omitidos
 
