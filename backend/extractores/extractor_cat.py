@@ -60,7 +60,9 @@ def leer_datos_cat():
 
 
 def procesar_datos_cat():
-    print("Iniciando extractor de Cataluña...")
+
+    print(f"------- Inicio -------")
+    print(f"Iniciando extractor de Cataluña...")
     
     xml_texto = leer_datos_cat()
 
@@ -86,19 +88,22 @@ def procesar_datos_cat():
     try:
 
         lista_estaciones = xml_root.findall(".//row/row")
+        total = len(lista_estaciones)
         
-        print(f"Procesando {len(lista_estaciones)} estaciones encontradas en el XML...")
-        
-        contador = 0
+        print(f"Procesando {total} estaciones encontradas en el XML...")
+    
+        print(f"------- Seguimiento de la ejecución -------")
 
         for i, item in enumerate(lista_estaciones):
+
+            nombre_estacion = get_texto_from_tag(item, 'denominaci')
+
+            print(f"[{i+1}/{total}] Insertando datos para: {nombre_estacion} ...", end="\r")
 
             nombre_prov = get_texto_from_tag(item, 'serveis_territorials')
             nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
 
             nombre_loc = get_texto_from_tag(item, 'municipi')
-
-            nombre_estacion = get_texto_from_tag(item, 'denominaci')
 
             tipo_estacion = "Estación_fija"
 
@@ -121,34 +126,34 @@ def procesar_datos_cat():
             url = tag_web.get('url')
 
             if not nombre_prov or not nombre_loc:
-                #print(f"Descartado falta provincia/localiad: {nombre_estacion}")
+                print(f"Descartado (falta provincia/localiad): item {i}")
                 contadores['descartados'] +=1
                 contadores['datos'] += 1
                 continue 
 
             if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                #print(f"Descartado (Duplicado): {nombre_estacion}")
+                print(f"Descartado (Duplicado): item {i}, nombre duplicado: {nombre_estacion}")
                 contadores['descartados'] += 1
                 contadores['nombre'] += 1
                 continue
 
             if not filtro.es_provincia_real(nombre_prov_final):
-                #print(f"Provincia no válida: {nombre_prov}")
+                print(f"Descartado (provincia no válida): item {i}, nombre provincia: {nombre_prov}")
                 contadores['descartados'] += 1
                 contadores['provincia'] += 1
                 continue
 
             if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                    #print(f"Omitiendo registro : CP inválido para estación fija.")
-                    contadores['descartados'] += 1
-                    contadores['cp'] += 1
-                    continue
+                print(f"Descartado (CP inválido): item {i}")
+                contadores['descartados'] += 1
+                contadores['cp'] += 1
+                continue
             
             if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
                 codigo_postal = ""
 
             if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                #print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
+                print(f"Descartado (Sin coordenadas válidas): item {i}, coordenadas: ({latitud},{longitud})")
                 contadores['descartados'] += 1
                 contadores['coordenadas'] += 1
                 continue
@@ -168,16 +173,16 @@ def procesar_datos_cat():
 
         conn.commit()
 
-        print("\n--- Resumen Final Cataluña ---")
+        print("\n------- Resumen Final Cataluña -------")
         print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
         print(f"Se han descartado : {contadores['descartados']}.")
-        print(f"--- Resumen de los campos ({contadores['descartados']}) descartados. ---")
+        print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
         print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
         print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
         print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
         print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
         print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
-        print(f"--- Final ---")
+        print(f"------- Final -------")
 
     except Exception as e:
         print(f"Error en el proceso: {e}")
