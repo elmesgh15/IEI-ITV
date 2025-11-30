@@ -2,6 +2,7 @@ import psycopg2
 import xml.etree.ElementTree as ET
 from io import StringIO
 from backend.almacen.database import conectar
+from backend.extractores.filtros import Validate
 
 def limpiar_texto(texto):
     if texto:
@@ -81,7 +82,10 @@ def procesar_datos_catalunya():
         # Encontramos todas las estaciones. 
         # La estructura suele ser <response><row><row ...> o simplemente <row><row>
         # Usamos .//row/row para buscar filas anidadas en cualquier nivel
+        filtro = Validate(cur)
+
         lista_estaciones = xml_root.findall(".//row/row")
+        contadores = {'insertados': 0, 'descartados': 0}
         
         print(f"Procesando {len(lista_estaciones)} estaciones encontradas en el XML...")
         
@@ -95,16 +99,19 @@ def procesar_datos_catalunya():
             
             # Mapeo: L.nombre <- municipi
             nombre_loc = get_texto_from_tag(estacion_xml, 'municipi')
+            nombre_estacion = get_texto_from_tag(estacion_xml, 'denominaci')
 
             if not nombre_prov or not nombre_loc:
                 continue # Saltamos si faltan datos clave
 
+            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                print(f"Descartado (Duplicado): {nombre_estacion}")
+                contadores['descartados'] += 1
+                continue
+
             # Obtener IDs
             id_prov = get_or_create_provincia(cur, nombre_prov)
             id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
-
-            # Mapeo: E.nombre <- denominaci (Es más descriptivo que 'estaci')
-            nombre_estacion = get_texto_from_tag(estacion_xml, 'denominaci')
 
             # Mapeo: E.tipo <- Fijo por defecto
             tipo_estacion = "Estación_fija"
@@ -114,7 +121,7 @@ def procesar_datos_catalunya():
 
             # Mapeo: E.codigo_postal <- cp
             cp_raw = get_texto_from_tag(estacion_xml, 'cp')
-            codigo_postal = cp_raw.zfill(5) if cp_raw else None
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
 
             # Mapeo: E.horario <- horari_de_servei
             horario = get_texto_from_tag(estacion_xml, 'horari_de_servei')
@@ -128,6 +135,11 @@ def procesar_datos_catalunya():
             
             latitud = convertir_coordenadas(lat_raw)
             longitud = convertir_coordenadas(long_raw)
+
+            if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
+                contadores['descartados'] += 1
+                continue
 
             # Mapeo: E.url <- atributo 'url' dentro de la etiqueta <web>
             # La etiqueta <web> se busca aparte para sacar su atributo
