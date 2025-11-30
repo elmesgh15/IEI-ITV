@@ -1,4 +1,4 @@
-#import psycopg2
+import psycopg2
 import csv
 import re
 from io import StringIO
@@ -74,7 +74,9 @@ def leer_datos_gal():
 
 
 def procesar_datos_gal():
-    print("Iniciando extractor de Galicia...")
+
+    print(f"------- Inicio -------")
+    print(f"Iniciando extractor de Galicia...")
 
     datos_csv_galicia = leer_datos_gal()
     
@@ -89,115 +91,118 @@ def procesar_datos_gal():
     cur = conn.cursor()
     filtro = Validate(cur)
     
-    # Contadores
-    registros_insertados = 0
-    registros_omitidos = 0
+    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0}
 
     try:
         
-        # Leer datos CSV
-        lector_csv = csv.DictReader(StringIO(datos_csv_galicia), delimiter=';')
-        lista_de_filas = list(lector_csv)
+        lista_estaciones = list(csv.DictReader(StringIO(datos_csv_galicia), delimiter=';'))
+        total = len(lista_estaciones)
         
-        print(f"Procesando {len(lista_de_filas)} registros...")
+        print(f"Procesando {total} estaciones encontradas en el CSV...")
 
-        for fila in lista_de_filas:
-            try:
-                # --- Validación Básica ---
-                nombre_estacion = limpiar_texto(fila.get('NOME DA ESTACIÓN'))
-                provincia_nombre = limpiar_texto(fila.get('PROVINCIA'))
-                localidad_nombre = limpiar_texto(fila.get('CONCELLO'))
+        print(f"------- Seguimiento de la ejecución -------")
 
-                nombre_prov_final = filtro.estandarizar_nombre_provincia(provincia_nombre)
-
-                if not filtro.es_provincia_real(nombre_prov_final):
-                    print(f"Provincia no válida: {provincia_nombre}")
-                    registros_omitidos += 1
-                    continue
-
-                if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                    print(f"Descartado (Duplicado): {nombre_estacion}")
-                    registros_omitidos += 1
-                    continue
-
-                if not provincia_nombre or not localidad_nombre:
-                    print(f"Fila omitida por falta de datos clave (Provincia/Localidad): {fila}")
-                    registros_omitidos += 1
-                    continue
-
-                # --- Procesamiento ---
-                provincia_id = get_or_create_provincia(cur, nombre_prov_final)
-                localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
-
+        for i, item in enumerate(lista_estaciones):
                 
-                tipo_estacion = 'Estación_fija'
-                direccion = limpiar_texto(fila.get('ENDEREZO'))
+            nombre_estacion = limpiar_texto(item.get('NOME DA ESTACIÓN'))
 
-                cp_raw = fila.get('CÓDIGO POSTAL')
-                codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+            nombre_prov = limpiar_texto(item.get('PROVINCIA'))
+            nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
 
-                if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                    print(f"Omitiendo registro : CP inválido para estación fija.")
-                    registros_omitidos += 1
-                    continue
-                if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
-                    codigo_postal = ""
+            nombre_loc = limpiar_texto(item.get('CONCELLO'))
 
-                coordenadas_str = fila.get('COORDENADAS GMAPS')
-                latitud = None
-                longitud = None
+            tipo_estacion = 'Estación_fija'
+
+            direccion = limpiar_texto(item.get('ENDEREZO'))
+
+            cp_raw = item.get('CÓDIGO POSTAL')
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+
+            horario = limpiar_texto(item.get('HORARIO'))
+
+            tel = limpiar_texto(item.get('TELÉFONO'))
+            email = limpiar_texto(item.get('CORREO ELECTRÓNICO'))
+
+            contacto = f"Tel: {tel} " if tel else ""
+            if email:
+                if contacto:
+                    contacto += f"| Email: {email}"
+                else:
+                    contacto = f"Email: {email}"
                 
-                if coordenadas_str and ',' in coordenadas_str:
-                    partes = coordenadas_str.split(',')
-                    if len(partes) == 2:
-                        latitud = convertir_coordenadas(partes[0])
-                        longitud = convertir_coordenadas(partes[1])
-                        
-                        if latitud is None or longitud is None:
-                            print(f"Aviso: Fallo al convertir coords: {coordenadas_str}")
+            url = limpiar_texto(item.get('SOLICITUDE DE CITA PREVIA'))
 
-                if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                    print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
-                    registros_omitidos += 1
-                    continue
+            coordenadas_str = item.get('COORDENADAS GMAPS')
                 
-                horario = limpiar_texto(fila.get('HORARIO'))
+            if coordenadas_str and ',' in coordenadas_str:
+                partes = coordenadas_str.split(',')
+                if len(partes) == 2:
+                    latitud = convertir_coordenadas(partes[0])
+                    longitud = convertir_coordenadas(partes[1])
 
-                tel = limpiar_texto(fila.get('TELÉFONO'))
-                email = limpiar_texto(fila.get('CORREO ELECTRÓNICO'))
-                contacto = f"Tel: {tel} " if tel else ""
-                if email:
-                    if contacto:
-                        contacto += f"| Email: {email}"
-                    else:
-                        contacto = f"Email: {email}"
-                
-                url = limpiar_texto(fila.get('SOLICITUDE DE CITA PREVIA'))
-                
-                # --- Inserción ---
-                cur.execute("""
-                    INSERT INTO Estacion 
-                    (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
-                )
-                
-                registros_insertados += 1
+            if not nombre_prov or not nombre_loc:
+                print(f"Descartado (falta provincia/localiad): item {i}")
+                contadores['descartados'] +=1
+                contadores['datos'] += 1
+                continue 
 
-            except Exception as e_fila:
-                print(f"Error procesando fila {fila}: {e_fila}")
-                registros_omitidos += 1
+            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                print(f"Descartado (Duplicado): item {i}, nombre duplicado: {nombre_estacion}")
+                contadores['descartados'] += 1
+                contadores['nombre'] += 1
+                continue
+
+            if not filtro.es_provincia_real(nombre_prov_final):
+                print(f"Descartado (Provincia no válida): item {i}, nombre provincia: {nombre_prov}")
+                contadores['descartados'] += 1
+                contadores['provincia'] += 1
+                continue
+
+            if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                print(f"Descartado (CP inválido): item {i}")
+                contadores['descartados'] += 1
+                contadores['cp'] += 1
+                continue
+            
+            if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                codigo_postal = ""
+
+            if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                print(f"Descartado (Sin coordenadas válidas): item {i}, coordenadas: ({latitud},{longitud})/({coordenadas_str})")
+                contadores['descartados'] += 1
+                contadores['coordenadas'] += 1
+                continue
+                
+            provincia_id = get_or_create_provincia(cur, nombre_prov_final)
+            localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
+            
+            cur.execute("""
+                INSERT INTO Estacion 
+                (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
+            )
+                
+            print(f"Insertado: item {i}")
+
+            contadores['insertados'] += 1
 
         conn.commit()
         
-        # --- Resumen Final ---
-        print("\n--- Resumen Final Galicia ---")
-        print(f"Insertados correctamente: {registros_insertados}")
-        print(f"Omitidos / Fallidos: {registros_omitidos}")
+        print("\n------- Resumen Final Cataluña -------")
+        print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
+        print(f"Se han descartado : {contadores['descartados']}.")
+        print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
+        print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
+        print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
+        print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
+        print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
+        print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
+        print(f"------- Final -------")
 
-    except (Exception, psycopg2.Error) as error:
-        print(f"Error crítico durante el proceso ETL: {error}")
+    except Exception as e:
+        print(f"Error en el proceso: {e}")
         if conn:
             conn.rollback()
 
@@ -206,8 +211,6 @@ def procesar_datos_gal():
             cur.close()
         if conn:
             conn.close()
-        print("Conexión a la base de datos cerrada.")
-    
 
 if __name__ == "__main__":
     procesar_datos_gal()

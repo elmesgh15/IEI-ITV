@@ -1,4 +1,3 @@
-#import psycopg2
 import xml.etree.ElementTree as ET
 from io import StringIO
 
@@ -64,14 +63,14 @@ def procesar_datos_cat():
     print(f"------- Inicio -------")
     print(f"Iniciando extractor de Cataluña...")
     
-    xml_texto = leer_datos_cat()
+    datos_xml_cat = leer_datos_cat()
 
-    if not xml_texto:
+    if not datos_xml_cat:
         print("No se pudieron extraer los datos.")
         return
 
     try:
-        xml_root = ET.fromstring(xml_texto)
+        xml_root = ET.fromstring(datos_xml_cat)
     except ET.ParseError as e:
         print(f"Error crítico: XML mal formado. {e}")
         return
@@ -97,8 +96,6 @@ def procesar_datos_cat():
         for i, item in enumerate(lista_estaciones):
 
             nombre_estacion = get_texto_from_tag(item, 'denominaci')
-
-            print(f"[{i+1}/{total}] Insertando datos para: {nombre_estacion} ...", end="\r")
 
             nombre_prov = get_texto_from_tag(item, 'serveis_territorials')
             nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
@@ -138,7 +135,7 @@ def procesar_datos_cat():
                 continue
 
             if not filtro.es_provincia_real(nombre_prov_final):
-                print(f"Descartado (provincia no válida): item {i}, nombre provincia: {nombre_prov}")
+                print(f"Descartado (Provincia no válida): item {i}, nombre provincia: {nombre_prov}")
                 contadores['descartados'] += 1
                 contadores['provincia'] += 1
                 continue
@@ -169,6 +166,8 @@ def procesar_datos_cat():
                 (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,horario, contacto, url, id_loc)
             )
             
+            print(f"Insertado: item {i}")
+
             contadores['insertados'] += 1
 
         conn.commit()
