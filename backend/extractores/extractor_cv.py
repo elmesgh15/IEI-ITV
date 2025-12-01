@@ -16,8 +16,6 @@ from backend.extractores.filtros import Validate
 
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-
-
 def limpiar_texto(texto):
     if isinstance(texto, str):
         return texto.strip()
@@ -124,6 +122,8 @@ def normalizar_tipo_estacion(tipo_origen):
 
 
 def procesar_datos_cv():
+
+    print(f"------- Inicio -------")
     print("Iniciando extractor de la Comunidad Valenciana...")
 
     datos_json = leer_datos_cv()
@@ -145,111 +145,114 @@ def procesar_datos_cv():
     cur = conn.cursor()
     filtro = Validate(cur)
 
-    registros_insertados = 0
-    registros_omitidos = 0
+    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0}
 
     try:
-        
+
         total = len(datos_json)
-        print(f"Procesando {total} estaciones...")
+
+        print(f"Procesando {total} estaciones encontradas en el JSON...")
 
         
         for i, item in enumerate(datos_json):
-            # --- MODIFICACIÓN AQUÍ ---
-            provincia_nombre = limpiar_texto(item.get('PROVINCIA'))
-            localidad_nombre = limpiar_texto(item.get('MUNICIPIO'))
             
+            nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
 
+            nombre_prov = limpiar_texto(item.get('PROVINCIA'))
             nombre_prov_final = filtro.estandarizar_nombre_provincia(provincia_nombre)
 
+            nombre_loc = limpiar_texto(item.get('MUNICIPIO'))
+            # PREGUNTAR AL PROFE
+            if not nombre_loc and nombre_prov:
+                nombre_loc = nombre_prov
             
+            tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
+
+            direccion = limpiar_texto(item.get('DIRECCIÓN'))
+                
+            cp_raw = item.get('C.POSTAL')
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+
+            horario = limpiar_texto(item.get('HORARIOS'))
+
+            contacto = limpiar_texto(item.get('CORREO'))
+
+            url_web = "www.sitval.com" 
+
+            print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({nombre_loc})...", end="\r")
+            latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
+
+            if not nombre_prov or not nombre_loc:
+                print(f"Item {i}: Descartado (Falta provincia/localiad).")
+                contadores['descartados'] +=1
+                contadores['datos'] += 1
+                continue 
+
+            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                print(f"Item {i}: Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
+                contadores['descartados'] += 1
+                contadores['nombre'] += 1
+                continue
 
             if not filtro.es_provincia_real(nombre_prov_final):
-                print(f"Provincia no válida: {provincia_nombre}")
-                registros_omitidos += 1
+                print(f"Item {i}: Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
+                contadores['descartados'] += 1
+                contadores['provincia'] += 1
                 continue
-            
-            # Si no hay municipio, usamos la provincia como municipio
-            if not localidad_nombre and provincia_nombre:
-                localidad_nombre = provincia_nombre
-            
-            # Si después de esto sigue faltando alguno (ej. falta provincia), entonces sí omitimos
-            if not provincia_nombre or not localidad_nombre:
-                print(f"Omitiendo registro {i}: Faltan datos geográficos clave.")
-                registros_omitidos += 1
+
+            if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                print(f"Item {i}: Descartado (CP inválido), cp: {cp_raw}.")
+                contadores['descartados'] += 1
+                contadores['cp'] += 1
                 continue
+            #PREGUNTAR AL PROFE
+            if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                codigo_postal = ""
+
+            if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                print(f"Item {i}: Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud})/Original: ({coordenadas_str}).")
+                contadores['descartados'] += 1
+                contadores['coordenadas'] += 1
+                continue
+
+            provincia_id = get_or_create_provincia(cur, nombre_prov_final)
+            localidad_id = get_or_create_localidad(cur, nombre_loc, provincia_id)
+
+            cur.execute("""
+                INSERT INTO Estacion 
+                (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url_web, localidad_id)
+            )
             
-
-            try:
-                # --- Procesamiento ---
-                provincia_id = get_or_create_provincia(cur, nombre_prov_final)
-                localidad_id = get_or_create_localidad(cur, localidad_nombre, provincia_id)
-                nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
-
-                if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                    print(f"Descartado (Duplicado): {nombre_estacion}")
-                    registros_omitidos += 1
-                    continue
-                
-                tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
-                direccion = limpiar_texto(item.get('DIRECCIÓN'))
-                
-                cp_raw = item.get('C.POSTAL')
-                codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
-
-                if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                    print(f"Omitiendo registro {i}: CP inválido para estación fija.")
-                    registros_omitidos += 1
-                    continue
-                if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
-                    codigo_postal = ""
-                    
-                
-                horario = limpiar_texto(item.get('HORARIOS'))
-                contacto = limpiar_texto(item.get('CORREO'))
-                url_web = "www.sitval.com" 
-
-                # --- Selenium para Coordenadas ---
-                print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({localidad_nombre})...", end="\r")
-                latitud, longitud = obtener_coordenadas(driver, direccion, localidad_nombre, provincia_nombre)
-
-                if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                    print(f"Descartado (Sin coordenadas válidas): {nombre_estacion}")
-                    registros_omitidos += 1
-                    continue
-
-                cur.execute("""
-                    INSERT INTO Estacion 
-                    (nombre, tipo, direccion, codigo_postal, longitud, latitud, horario, contacto, url, codigo_localidad) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url_web, localidad_id)
-                )
-                registros_insertados += 1
-                
-            except Exception as e_row:
-                print(f"\nError en fila {i}: {e_row}")
-                registros_omitidos += 1
+            print(f"Item {i}: Insertado correctamente.")
 
         conn.commit()
-        print(f"\n\n--- Resumen Final ---")
-        print(f"Insertados: {registros_insertados}")
-        print(f"Fallidos/Omitidos: {registros_omitidos}")
-        
 
-        return registros_insertados, registros_omitidos
+        print("\n------- Resumen Final Cataluña -------")
+        print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
+        print(f"Se han descartado : {contadores['descartados']}.")
+        print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
+        print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
+        print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
+        print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
+        print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
+        print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
+        print(f"------- Final -------")
 
-    except Exception as error:
-        print(f"Error crítico: {error}")
-        if conn: conn.rollback()
-        return 0, 0
+    except Exception as e:
+        print(f"Error en el proceso: {e}")
+        if conn: 
+            conn.rollback()
 
     finally:
-        # Cerrar navegador y base de datos
-        if driver: driver.quit()
-        if cur: cur.close()
-        if conn: conn.close()
-        print("Recursos liberados.")
+        if driver: 
+            driver.quit()
+        if cur: 
+            cur.close()
+        if conn: 
+            conn.close()
 
 if __name__ == "__main__":
     procesar_datos_cv()
