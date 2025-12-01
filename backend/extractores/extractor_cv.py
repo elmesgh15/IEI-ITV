@@ -222,6 +222,8 @@ def procesar_datos_cv():
             
             print(f"Item {i}: Insertado correctamente.")
 
+            contadores['insertados'] += 1
+
         conn.commit()
 
         print("\n------- Resumen Final Comunidad Valenciana -------")
