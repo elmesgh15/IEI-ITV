@@ -1,5 +1,4 @@
 import json
-#import psycopg2
 import time
 import os
 import sys
@@ -13,8 +12,6 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from backend.almacen.database import conectar
 from backend.extractores.filtros import Validate
-
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 def limpiar_texto(texto):
     if isinstance(texto, str):
@@ -131,10 +128,6 @@ def procesar_datos_cv():
     if not datos_json:
         print("No se pudieron extraer los datos.")
         return
-
-    #if not isinstance(datos_json, list):
-        #print(f"Error de formato: Se esperaba una lista, se recibió {type(datos_json)}")
-        #return 0, 0
     
     driver = iniciar_driver()
 
@@ -180,7 +173,7 @@ def procesar_datos_cv():
 
             url_web = "www.sitval.com" 
 
-            print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({nombre_loc})...", end="\r")
+            print(f"[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({nombre_loc})...")
             latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
 
             if not nombre_prov or not nombre_loc:
@@ -211,7 +204,7 @@ def procesar_datos_cv():
                 codigo_postal = ""
 
             if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"Item {i}: Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud})/Original: ({coordenadas_str}).")
+                print(f"Item {i}: Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
                 contadores['descartados'] += 1
                 contadores['coordenadas'] += 1
                 continue
@@ -231,7 +224,7 @@ def procesar_datos_cv():
 
         conn.commit()
 
-        print("\n------- Resumen Final Cataluña -------")
+        print("\n------- Resumen Final Comunidad Valenciana -------")
         print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
         print(f"Se han descartado : {contadores['descartados']}.")
         print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")

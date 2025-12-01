@@ -1,4 +1,3 @@
-import psycopg2
 import csv
 import re
 from io import StringIO
@@ -190,7 +189,7 @@ def procesar_datos_gal():
 
         conn.commit()
         
-        print("\n------- Resumen Final Cataluña -------")
+        print("\n------- Resumen Final Galicia -------")
         print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
         print(f"Se han descartado : {contadores['descartados']}.")
         print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
