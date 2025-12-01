@@ -153,13 +153,14 @@ def procesar_datos_cv():
 
         print(f"Procesando {total} estaciones encontradas en el JSON...")
 
-        
+        print(f"------- Seguimiento de la ejecución -------")
+
         for i, item in enumerate(datos_json):
             
             nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
 
             nombre_prov = limpiar_texto(item.get('PROVINCIA'))
-            nombre_prov_final = filtro.estandarizar_nombre_provincia(provincia_nombre)
+            nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
 
             nombre_loc = limpiar_texto(item.get('MUNICIPIO'))
             # PREGUNTAR AL PROFE
