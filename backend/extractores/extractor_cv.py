@@ -158,7 +158,7 @@ def procesar_datos_cv():
             nombre_loc = limpiar_texto(item.get('MUNICIPIO'))
             # PREGUNTAR AL PROFE
             if not nombre_loc and nombre_prov:
-                nombre_loc = nombre_prov
+                nombre_loc = nombre_prov_final
             
             tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
 
