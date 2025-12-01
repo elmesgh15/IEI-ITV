@@ -141,25 +141,25 @@ def procesar_datos_gal():
                     longitud = convertir_coordenadas(partes[1])
 
             if not nombre_prov or not nombre_loc:
-                print(f"Descartado (falta provincia/localiad): item {i}.")
+                print(f"Item {i}: Descartado (Falta provincia/localiad).")
                 contadores['descartados'] +=1
                 contadores['datos'] += 1
                 continue 
 
             if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                print(f"Descartado (Duplicado): item {i}, nombre duplicado: {nombre_estacion}.")
+                print(f"Item {i}: Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
                 contadores['descartados'] += 1
                 contadores['nombre'] += 1
                 continue
 
             if not filtro.es_provincia_real(nombre_prov_final):
-                print(f"Descartado (Provincia no válida): item {i}, nombre provincia: {nombre_prov}.")
+                print(f"Item {i}: Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
                 contadores['descartados'] += 1
                 contadores['provincia'] += 1
                 continue
 
             if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                print(f"Descartado (CP inválido): item {i}.")
+                print(f"Item {i}: Descartado (CP inválido), cp: {cp_raw}.")
                 contadores['descartados'] += 1
                 contadores['cp'] += 1
                 continue
@@ -168,7 +168,7 @@ def procesar_datos_gal():
                 codigo_postal = ""
 
             if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"Descartado (Sin coordenadas válidas): item {i}, coordenadas: ({latitud},{longitud})/({coordenadas_str}).")
+                print(f"Item {i}: Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud})/Original: ({coordenadas_str}).")
                 contadores['descartados'] += 1
                 contadores['coordenadas'] += 1
                 continue
@@ -184,7 +184,7 @@ def procesar_datos_gal():
                 (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud, horario, contacto, url, localidad_id)
             )
                 
-            print(f"Insertado: item {i}.")
+            print(f"Item {i}: Insertado correctamente.")
 
             contadores['insertados'] += 1
 
