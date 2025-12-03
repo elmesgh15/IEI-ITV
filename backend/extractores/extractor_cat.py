@@ -82,7 +82,7 @@ def procesar_datos_cat():
     cur = conn.cursor()
     filtro = Validate(cur)
 
-    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0}
+    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0, 'modificados': 0}
 
     try:
 
@@ -122,35 +122,39 @@ def procesar_datos_cat():
             tag_web = item.find('web')
             url = tag_web.get('url')
 
+            print(f"\nInsertando datos [{i+1}/{total}], estacion: {nombre_estacion} ({nombre_loc}, {nombre_prov})")
+
             if not nombre_prov or not nombre_loc:
-                print(f"Item {i}: Descartado (Falta provincia/localiad).")
+                print(f"--Descartado (Falta provincia/localiad).")
                 contadores['descartados'] +=1
                 contadores['datos'] += 1
                 continue 
 
             if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                print(f"Item {i}: Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
+                print(f"--Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
                 contadores['descartados'] += 1
                 contadores['nombre'] += 1
                 continue
 
             if not filtro.es_provincia_real(nombre_prov_final):
-                print(f"Item {i}: Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
+                print(f"--Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
                 contadores['descartados'] += 1
                 contadores['provincia'] += 1
                 continue
 
             if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                print(f"Item {i}: Descartado (CP inválido), cp: {cp_raw}.")
+                print(f"--Descartado (CP inválido), cp: {cp_raw}.")
                 contadores['descartados'] += 1
                 contadores['cp'] += 1
                 continue
             
             if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
                 codigo_postal = ""
+                contadores['modificados'] += 1
+                print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
 
             if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"Item {i}: Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
+                print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
                 contadores['descartados'] += 1
                 contadores['coordenadas'] += 1
                 continue
@@ -166,7 +170,7 @@ def procesar_datos_cat():
                 (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,horario, contacto, url, id_loc)
             )
             
-            print(f"Item {i}: Insertado correctamente.")
+            print(f"--Insertado correctamente.")
 
             contadores['insertados'] += 1
 
@@ -181,6 +185,8 @@ def procesar_datos_cat():
         print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
         print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
         print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
+        print(f"------- Resumen de los campos ({contadores['modificados']}) modificados. -------")
+        print(f"Se han modificado: {contadores['modificados']} por tener un CP en tipos de estación incorrectos.")
         print(f"------- Final -------")
 
     except Exception as e:
