@@ -30,6 +30,12 @@ class Validate:
 
     }
 
+    PREFIJOS_CP = {
+        'GAL': {'15', '27', '32', '36'},       # Coruña, Lugo, Ourense, Pontevedra
+        'CV':  {'03', '12', '46'},             # Alicante, Castellón, Valencia
+        'CAT': {'08', '17', '25', '43'}        # Barcelona, Girona, Lleida, Tarragona
+    }
+
     def __init__(self, cursor):
         self.cursor = cursor
 
@@ -60,19 +66,40 @@ class Validate:
             print(f"Error verificando duplicado: {e}")
             return False
 
-    def validar_y_formatear_cp(self, cp_raw):
+    def validar_y_formatear_cp(self, cp_raw, comunidad_destino=None):
+        """
+        Valida el CP:
+        1. Formato: Debe tener 5 dígitos (rellena con ceros si son 4).
+        2. Región (Opcional): Si pasas 'comunidad_destino' (GAL, CV, CAT),
+           comprueba que los 2 primeros dígitos sean correctos para esa zona.
+        """
         if not cp_raw:
-            return ""
+            return None
         
         cp_str = str(cp_raw).strip()
         
+        # 1. Formateo de longitud
+        cp_limpio = None
         if len(cp_str) == 4 and cp_str.isdigit():
-            return "0" + cp_str
+            cp_limpio = "0" + cp_str
+        elif len(cp_str) == 5 and cp_str.isdigit():
+            cp_limpio = cp_str
         
-        if len(cp_str) == 5 and cp_str.isdigit():
-            return cp_str
-        
-        return ""
+        # Si no tiene longitud válida, retornamos None
+        if not cp_limpio:
+            return None
+
+        # 2. Validación de Región (Si se solicita)
+        if comunidad_destino:
+            prefijos_validos = self.PREFIJOS_CP.get(comunidad_destino)
+            prefijo_actual = cp_limpio[:2] # Los dos primeros números
+            
+            if prefijos_validos and prefijo_actual not in prefijos_validos:
+                # El CP tiene formato válido (5 nums) pero es de otra provincia
+                # Ej: Un CP de Madrid (28xxx) en el extractor de Galicia.
+                return None 
+
+        return cp_limpio
 
     def tiene_coordenadas_validas(self, latitud, longitud):
         if latitud is None or longitud is None:

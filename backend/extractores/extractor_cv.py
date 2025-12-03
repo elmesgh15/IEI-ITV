@@ -165,7 +165,7 @@ def procesar_datos_cv():
             direccion = limpiar_texto(item.get('DIRECCIÓN'))
                 
             cp_raw = item.get('C.POSTAL')
-            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='CV')
 
             horario = limpiar_texto(item.get('HORARIOS'))
 

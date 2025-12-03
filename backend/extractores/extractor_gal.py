@@ -115,7 +115,7 @@ def procesar_datos_gal():
             direccion = limpiar_texto(item.get('ENDEREZO'))
 
             cp_raw = item.get('CÓDIGO POSTAL')
-            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='GAL')
 
             horario = limpiar_texto(item.get('HORARIO'))
 

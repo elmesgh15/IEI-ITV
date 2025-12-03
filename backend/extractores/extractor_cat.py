@@ -107,7 +107,7 @@ def procesar_datos_cat():
             direccion = get_texto_from_tag(item, 'adre_a')
 
             cp_raw = get_texto_from_tag(item, 'cp')
-            codigo_postal = filtro.validar_y_formatear_cp(cp_raw)
+            codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='CAT')
 
             horario = get_texto_from_tag(item, 'horari_de_servei')
 
