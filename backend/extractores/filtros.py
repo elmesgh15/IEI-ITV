@@ -67,37 +67,28 @@ class Validate:
             return False
 
     def validar_y_formatear_cp(self, cp_raw, comunidad_destino=None):
-        """
-        Valida el CP:
-        1. Formato: Debe tener 5 dígitos (rellena con ceros si son 4).
-        2. Región (Opcional): Si pasas 'comunidad_destino' (GAL, CV, CAT),
-           comprueba que los 2 primeros dígitos sean correctos para esa zona.
-        """
         if not cp_raw:
-            return None
+            return ""
         
         cp_str = str(cp_raw).strip()
         
-        # 1. Formateo de longitud
+        
         cp_limpio = None
         if len(cp_str) == 4 and cp_str.isdigit():
             cp_limpio = "0" + cp_str
         elif len(cp_str) == 5 and cp_str.isdigit():
             cp_limpio = cp_str
         
-        # Si no tiene longitud válida, retornamos None
         if not cp_limpio:
-            return None
+            return ""
 
-        # 2. Validación de Región (Si se solicita)
+       
         if comunidad_destino:
             prefijos_validos = self.PREFIJOS_CP.get(comunidad_destino)
-            prefijo_actual = cp_limpio[:2] # Los dos primeros números
+            prefijo_actual = cp_limpio[:2] 
             
             if prefijos_validos and prefijo_actual not in prefijos_validos:
-                # El CP tiene formato válido (5 nums) pero es de otra provincia
-                # Ej: Un CP de Madrid (28xxx) en el extractor de Galicia.
-                return None 
+                return "" 
 
         return cp_limpio
 
