@@ -1,6 +1,6 @@
 # --- Interfaz de usuario (Frontend de escritorio) ---
 PySide6
-#PySide6-WebEngine
+PySide6-WebEngine
 
 # --- Procesamiento de datos (ETL, integración) ---
 pandas
@@ -16,3 +16,5 @@ uvicorn
 
 # --- Utilidades opcionales (recomendadas) ---
 python-dotenv     # Para variables de entorno (credenciales DB, rutas, etc.)
+
+selenium
