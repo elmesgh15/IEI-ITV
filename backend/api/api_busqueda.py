@@ -12,18 +12,13 @@ async def buscar_estaciones(
     provincia: Optional[str] = Query(None),
     tipo: Optional[str] = Query(None)
 ):
-    """
-    Busca estaciones ITV según los criterios especificados.
-    Todos los parámetros son opcionales. Si no se especifica ninguno, devuelve todas las estaciones.
-    """
+
     conn = conectar()
     if not conn:
         raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")
     
     try:
         cur = conn.cursor()
-        
-        # Construir query dinámicamente según los filtros
         query = """
             SELECT 
                 e.cod_estacion, e.nombre, e.tipo, e.direccion, e.codigo_postal,
@@ -88,9 +83,6 @@ async def buscar_estaciones(
 
 @router.get("/provincias", response_model=List[ProvinciaResponse])
 async def obtener_provincias():
-    """
-    Obtiene la lista de todas las provincias en la base de datos.
-    """
     conn = conectar()
     if not conn:
         raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")
@@ -114,9 +106,6 @@ async def obtener_provincias():
 
 @router.get("/localidades/{provincia}", response_model=List[LocalidadResponse])
 async def obtener_localidades(provincia: str):
-    """
-    Obtiene todas las localidades de una provincia específica.
-    """
     conn = conectar()
     if not conn:
         raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")

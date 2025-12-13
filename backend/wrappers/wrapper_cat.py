@@ -2,14 +2,9 @@ from io import StringIO
 import sys
 
 def ejecutar_carga_cat():
-    """
-    Wrapper para ejecutar la carga de datos de Catalunya.
-    Captura la salida y devuelve un diccionario con los resultados.
-    """
-    # Importar el extractor
+
     from backend.extractores.extractor_cat import procesar_datos_cat
     
-    # Capturar stdout para obtener los logs
     old_stdout = sys.stdout
     sys.stdout = captured_output = StringIO()
     
@@ -24,13 +19,10 @@ def ejecutar_carga_cat():
     }
     
     try:
-        # Ejecutar el procesamiento
         procesar_datos_cat()
         
-        # Obtener la salida capturada
         output = captured_output.getvalue()
-        
-        # Parsear los contadores del output
+
         for line in output.split('\n'):
             if 'Se han insertado :' in line and 'correctamente' in line:
                 try:

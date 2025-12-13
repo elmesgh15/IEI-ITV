@@ -9,15 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 router = APIRouter(prefix="/api", tags=["carga"])
 
-# Executor para tareas de carga en background
 executor = ThreadPoolExecutor(max_workers=1)
 
 @router.post("/cargar", response_model=CargaResponse)
 async def cargar_datos(request: CargaRequest):
-    """
-    Ejecuta la carga de datos desde las fuentes seleccionadas.
-    Este proceso puede tardar varios minutos dependiendo de las fuentes seleccionadas.
-    """
+
     if not (request.galicia or request.valencia or request.catalunya):
         raise HTTPException(
             status_code=400, 
@@ -30,7 +26,7 @@ async def cargar_datos(request: CargaRequest):
     detalles = {}
     
     try:
-        # Ejecutar carga de Comunidad Valenciana
+
         if request.valencia:
             try:
                 resultado = await asyncio.get_event_loop().run_in_executor(
@@ -44,7 +40,6 @@ async def cargar_datos(request: CargaRequest):
                 mensajes.append(f"Error en Valencia: {str(e)}")
                 detalles['valencia'] = {'error': str(e)}
         
-        # Ejecutar carga de Galicia
         if request.galicia:
             try:
                 resultado = await asyncio.get_event_loop().run_in_executor(
@@ -58,7 +53,6 @@ async def cargar_datos(request: CargaRequest):
                 mensajes.append(f"Error en Galicia: {str(e)}")
                 detalles['galicia'] = {'error': str(e)}
         
-        # Ejecutar carga de Catalunya
         if request.catalunya:
             try:
                 resultado = await asyncio.get_event_loop().run_in_executor(
@@ -87,9 +81,7 @@ async def cargar_datos(request: CargaRequest):
 
 @router.delete("/almacen")
 async def borrar_almacen():
-    """
-    Borra todos los datos del almacén (estaciones, localidades y provincias).
-    """
+
     conn = conectar()
     if not conn:
         raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")
@@ -97,7 +89,6 @@ async def borrar_almacen():
     try:
         cur = conn.cursor()
         
-        # Borrar en orden inverso debido a las foreign keys
         cur.execute("DELETE FROM Estacion")
         estaciones_borradas = cur.rowcount
         
@@ -132,9 +123,7 @@ async def borrar_almacen():
 
 @router.get("/estado", response_model=EstadoAlmacenResponse)
 async def obtener_estado():
-    """
-    Obtiene estadísticas del estado actual del almacén de datos.
-    """
+
     conn = conectar()
     if not conn:
         raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")
@@ -142,19 +131,15 @@ async def obtener_estado():
     try:
         cur = conn.cursor()
         
-        # Total de estaciones
         cur.execute("SELECT COUNT(*) FROM Estacion")
         total_estaciones = cur.fetchone()[0]
         
-        # Total de provincias
         cur.execute("SELECT COUNT(*) FROM Provincia")
         total_provincias = cur.fetchone()[0]
         
-        # Total de localidades
         cur.execute("SELECT COUNT(*) FROM Localidad")
         total_localidades = cur.fetchone()[0]
         
-        # Estaciones por tipo
         cur.execute("""
             SELECT tipo, COUNT(*) 
             FROM Estacion 
