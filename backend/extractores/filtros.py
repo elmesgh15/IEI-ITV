@@ -74,6 +74,14 @@ class Validate:
         'CAT': {'08', '17', '25', '43'}        # Barcelona, Girona, Lleida, Tarragona
     }
 
+    RANGOS_COORDENADAS = {
+        # Aproximaciones rectangulares para validación básica
+        'GAL': {'lat_min': 41.5, 'lat_max': 44.0, 'lon_min': -9.5, 'lon_max': -6.5},
+        'CV':  {'lat_min': 37.5, 'lat_max': 41.0, 'lon_min': -2.0, 'lon_max': 1.0},
+        'CAT': {'lat_min': 40.0, 'lat_max': 43.0, 'lon_min': 0.0, 'lon_max': 3.5},
+        'ESP': {'lat_min': 36.0, 'lat_max': 44.0, 'lon_min': -10.0, 'lon_max': 3.5}
+    }
+
     def __init__(self, cursor):
         self.cursor = cursor
 
@@ -202,26 +210,17 @@ class Validate:
 
         return cp_limpio
 
-    def tiene_coordenadas_validas(self, latitud, longitud) -> bool:
+    def tiene_coordenadas_validas(self, latitud, longitud, comunidad='ESP') -> bool:
         """
-        Valida que las coordenadas GPS estén dentro del rango geográfico de España.
+        Valida que las coordenadas GPS estén dentro del rango geográfico de la comunidad.
         
         Args:
             latitud: Latitud en formato decimal
             longitud: Longitud en formato decimal
+            comunidad: Código de la comunidad ('GAL', 'CV', 'CAT', 'ESP')
         
         Returns:
-            True si las coordenadas son válidas y están en España, False en caso contrario
-        
-        Validation Range:
-            - Latitud: 36.0° a 44.0° (sur de Andalucía a Pirineos)
-            - Longitud: -10.0° a 3.5° (oeste de Galicia a este de Cataluña)
-        
-        Example:
-            >>> tiene_coordenadas_validas(40.4168, -3.7038)  # Madrid
-            True
-            >>> tiene_coordenadas_validas(48.8566, 2.3522)  # París
-            False
+            True si las coordenadas son válidas y están en el rango, False en caso contrario
         """
         if latitud is None or longitud is None:
             return False
@@ -230,11 +229,10 @@ class Validate:
             lat = float(latitud)
             lon = float(longitud)
             
-            LAT_MIN, LAT_MAX = 36.0, 44.0
-            LON_MIN, LON_MAX = -10.0, 3.5
+            rango = self.RANGOS_COORDENADAS.get(comunidad, self.RANGOS_COORDENADAS['ESP'])
             
-            en_rango_lat = LAT_MIN <= lat <= LAT_MAX
-            en_rango_lon = LON_MIN <= lon <= LON_MAX
+            en_rango_lat = rango['lat_min'] <= lat <= rango['lat_max']
+            en_rango_lon = rango['lon_min'] <= lon <= rango['lon_max']
             
             if not (en_rango_lat and en_rango_lon):
                 return False

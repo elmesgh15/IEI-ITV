@@ -176,7 +176,7 @@ def procesar_datos_cat():
                     contadores['modificados'] += 1
                     print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
 
-                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                if not filtro.tiene_coordenadas_validas(latitud, longitud, 'CAT'):
                     print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
                     contadores['descartados'] += 1
                     contadores['coordenadas'] += 1

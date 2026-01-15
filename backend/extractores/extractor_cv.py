@@ -236,7 +236,7 @@ def procesar_datos_cv():
                 print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
 
             if tipo_estacion == "Estación_fija":
-                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                if not filtro.tiene_coordenadas_validas(latitud, longitud, 'CV'):
                     print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
                     contadores['descartados'] += 1
                     contadores['coordenadas'] += 1
