@@ -38,6 +38,13 @@ class APIClient(QObject):
         >>> client.buscar_estaciones(provincia="Valencia")
     """
     
+    # Señales para manejar respuestas asíncronas
+    busqueda_completada = Signal(list)
+    carga_completada = Signal(dict)
+    error_ocurrido = Signal(str)
+    provincias_recibidas = Signal(list)
+    estado_recibido = Signal(dict)
+    
     def __init__(self, base_url="http://127.0.0.1:8000"):
         super().__init__()
         self.base_url = base_url

@@ -29,24 +29,24 @@ async def buscar_estaciones(
     localidad: Optional[str] = Query(
         None,
         description="Nombre de la localidad (búsqueda parcial, case-insensitive)",
-        example="Valencia"
+        examples=["Valencia"]
     ),
     codigo_postal: Optional[str] = Query(
         None,
         description="Código postal exacto (5 dígitos)",
-        example="46001",
+        examples=["46001"],
         min_length=5,
         max_length=5
     ),
     provincia: Optional[str] = Query(
         None,
         description="Nombre de la provincia (búsqueda parcial, case-insensitive)",
-        example="Valencia"
+        examples=["Valencia"]
     ),
     tipo: Optional[str] = Query(
         None,
         description="Tipo de estación",
-        example="Estación_fija",
+        examples=["Estación_fija"],
         enum=["Estación_fija", "Estación_móvil", "Otros"]
     )
 ):
@@ -203,13 +203,7 @@ async def obtener_provincias():
     description="Retorna todas las localidades de una provincia específica",
     response_description="Lista de localidades ordenadas alfabéticamente por nombre"
 )
-async def obtener_localidades(
-    provincia: str = Query(
-        ...,
-        description="Nombre de la provincia (case-insensitive)",
-        example="Valencia"
-    )
-):
+async def obtener_localidades(provincia: str):
     """
     Obtiene todas las localidades pertenecientes a una provincia específica.
     
