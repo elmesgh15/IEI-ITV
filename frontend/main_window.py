@@ -1,10 +1,31 @@
-# frontend/main_window.py
+"""
+Ventana principal de la aplicación IEI-ITV.
+
+Este módulo define la ventana principal con sistema de pestañas que integra:
+- Pestaña de búsqueda de estaciones
+- Pestaña de carga de datos
+
+Utiliza PySide6 (Qt for Python) para la interfaz gráfica con tema oscuro personalizado.
+"""
+
 from PySide6.QtWidgets import QMainWindow, QTabWidget
 from frontend.ventanas.ventana_busqueda import VentanaBusqueda
 from frontend.ventanas.ventana_carga import VentanaCarga
 
 class MainWindow(QMainWindow):
-    """Ventana principal con pestañas para Buscador y Carga."""
+    """
+    Ventana principal con pestañas para Buscador y Carga.
+    
+    Configura la interfaz principal de la aplicación con:
+    - Sistema de pestañas (QTabWidget)
+    - Tema oscuro con gradientes
+    - Integración de ventanas de búsqueda y carga
+    
+    Attributes:
+        tabs (QTabWidget): Widget de pestañas principal
+        ventana_busqueda (VentanaBusqueda): Pestaña de búsqueda de estaciones
+        ventana_carga (VentanaCarga): Pestaña de carga de datos
+    """
 
     def __init__(self):
         super().__init__()

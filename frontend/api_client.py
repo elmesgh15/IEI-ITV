@@ -1,16 +1,42 @@
+"""
+Cliente HTTP asíncrono para comunicación con la API FastAPI de estaciones ITV.
+
+Este módulo implementa un cliente basado en Qt Network (QNetworkAccessManager)
+para realizar peticiones HTTP asíncronas a la API REST del backend.
+
+Utiliza el patrón de señales y slots de Qt para manejar respuestas asíncronas
+sin bloquear la interfaz de usuario.
+"""
+
 from PySide6.QtCore import QObject, Signal, QUrl
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 import json
 
 class APIClient(QObject):
-    """Cliente HTTP para comunicarse con la API FastAPI"""
+    """
+    Cliente HTTP para comunicarse con la API FastAPI de estaciones ITV.
     
-    # Señales para manejar respuestas asíncronas
-    busqueda_completada = Signal(list)
-    carga_completada = Signal(dict)
-    error_ocurrido = Signal(str)
-    provincias_recibidas = Signal(list)
-    estado_recibido = Signal(dict)
+    Proporciona métodos para todas las operaciones de la API:
+    - Búsqueda de estaciones
+    - Obtención de catálogos (provincias, localidades)
+    - Carga de datos
+    - Gestión del almacén (borrado, estado)
+    
+    Todas las operaciones son asíncronas y emiten señales Qt cuando completan.
+    
+    Signals:
+        busqueda_completada(list): Emitida cuando se completa una búsqueda
+        carga_completada(dict): Emitida cuando se completa una carga o borrado
+        error_ocurrido(str): Emitida cuando hay un error en cualquier operación
+        provincias_recibidas(list): Emitida cuando se recibe la lista de provincias
+        estado_recibido(dict): Emitida cuando se recibe el estado del almacén
+    
+    Example:
+        >>> client = APIClient()
+        >>> client.busqueda_completada.connect(self.mostrar_resultados)
+        >>> client.error_ocurrido.connect(self.mostrar_error)
+        >>> client.buscar_estaciones(provincia="Valencia")
+    """
     
     def __init__(self, base_url="http://127.0.0.1:8000"):
         super().__init__()
