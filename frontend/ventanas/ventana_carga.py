@@ -312,7 +312,7 @@ class VentanaCarga(QWidget):
                 self.log_output.append(f"\nTotal insertados: {resultado['insertados']}")
                 self.log_output.append(f"Total descartados: {resultado['descartados']}")
             
-            if 'detalles' in resultado and resultado['detalles']:
+            if 'detalles' in resultado and resultado['detalles'] and resultado.get('mensaje') != 'Almacén borrado correctamente':
                 self.log_output.append("\n=== DETALLES POR FUENTE ===\n")
                 for fuente, detalle in resultado['detalles'].items():
                     self.log_output.append(f"\n{fuente.upper()}:")
