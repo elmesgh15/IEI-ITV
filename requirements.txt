@@ -1,5 +1,5 @@
 # --- Interfaz de usuario (Frontend de escritorio) ---
-PySide6==6.8.0
+PySide6==6.8.1
 
 # --- Procesamiento de datos (ETL, integración) ---
 pandas

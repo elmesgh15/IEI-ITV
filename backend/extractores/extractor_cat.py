@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 from io import StringIO
+import sys
 
 from backend.almacen.database import conectar
 from backend.extractores.filtros import Validate
@@ -59,152 +60,182 @@ def leer_datos_cat():
 
 
 def procesar_datos_cat():
-
-    print(f"------- Inicio -------")
-    print(f"Iniciando extractor de Cataluña...")
     
-    datos_xml_cat = leer_datos_cat()
+    # Buffer local para capturar logs sin afectar stdout global
+    output_buffer = StringIO()
+    
+    # Función auxiliar para redirigir prints al buffer
+    def print(*args, **kwargs):
+        # Construir el mensaje como lo haría print
+        sep = kwargs.get('sep', ' ')
+        end = kwargs.get('end', '\n')
+        msg = sep.join(map(str, args)) + end
+        output_buffer.write(msg)
+        # Opcional: escribir también en stdout real para depuración en consola
+        sys.__stdout__.write(msg)
 
-    if not datos_xml_cat:
-        print("No se pudieron extraer los datos.")
-        return
-
-    try:
-        xml_root = ET.fromstring(datos_xml_cat)
-    except ET.ParseError as e:
-        print(f"Error crítico: XML mal formado. {e}")
-        return
-
-    conn = None
-    cur = None
-
-    conn = conectar()
-    cur = conn.cursor()
-    filtro = Validate(cur)
-
-    contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0, 'modificados': 0}
-
-    try:
-
-        lista_estaciones = xml_root.findall(".//row/row")
-        total = len(lista_estaciones)
+    # Bloque principal (antes try/finally para stdout). Se mantiene indentación.
+    if True:
+        print(f"------- Inicio -------")
+        print(f"Iniciando extractor de Cataluña...")
         
-        print(f"Procesando {total} estaciones encontradas en el XML...")
-    
-        print(f"------- Seguimiento de la ejecución -------")
+        datos_xml_cat = leer_datos_cat()
 
-        for i, item in enumerate(lista_estaciones):
+        if not datos_xml_cat:
+            print("No se pudieron extraer los datos.")
+            return {
+                'insertados': 0,
+                'descartados': 0,
+                'log': output_buffer.getvalue()
+            }
 
-            nombre_estacion = get_texto_from_tag(item, 'denominaci')
+        try:
+            xml_root = ET.fromstring(datos_xml_cat)
+        except ET.ParseError as e:
+            print(f"Error crítico: XML mal formado. {e}")
+            return {
+                'insertados': 0,
+                'descartados': 0,
+                'log': output_buffer.getvalue()
+            }
 
-            nombre_prov = get_texto_from_tag(item, 'serveis_territorials')
-            nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
+        conn = None
+        cur = None
 
-            nombre_loc = get_texto_from_tag(item, 'municipi')
+        conn = conectar()
+        cur = conn.cursor()
+        filtro = Validate(cur)
 
-            tipo_estacion = "Estación_fija"
+        contadores = {'insertados': 0, 'descartados': 0, 'cp': 0, 'coordenadas': 0, 'nombre': 0, 'provincia': 0, 'datos': 0, 'modificados': 0}
 
-            direccion = get_texto_from_tag(item, 'adre_a')
-
-            cp_raw = get_texto_from_tag(item, 'cp')
-            codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='CAT')
-
-            horario = get_texto_from_tag(item, 'horari_de_servei')
-
-            contacto = get_texto_from_tag(item, 'correu_electr_nic')
-
-            lat_raw = get_texto_from_tag(item, 'lat')
-            latitud = convertir_coordenadas(lat_raw)
-
-            long_raw = get_texto_from_tag(item, 'long')
-            longitud = convertir_coordenadas(long_raw)
-
-            tag_web = item.find('web')
-            url = tag_web.get('url')
-
-            print(f"\nInsertando datos [{i+1}/{total}], estacion: {nombre_estacion} ({nombre_loc}, {nombre_prov})")
-
-            if not nombre_prov or not nombre_loc:
-                print(f"--Descartado (Falta provincia/localiad).")
-                contadores['descartados'] +=1
-                contadores['datos'] += 1
-                continue 
-
-            if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
-                print(f"--Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
-                contadores['descartados'] += 1
-                contadores['nombre'] += 1
-                continue
-
-            if not filtro.es_provincia_real(nombre_prov_final):
-                print(f"--Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
-                contadores['descartados'] += 1
-                contadores['provincia'] += 1
-                continue
-
-            if tipo_estacion == "Estación_fija" and codigo_postal == "":
-                print(f"--Descartado (CP inválido), cp: {cp_raw}.")
-                contadores['descartados'] += 1
-                contadores['cp'] += 1
-                continue
+        try:
+            lista_estaciones = xml_root.findall(".//row/row")
+            total = len(lista_estaciones)
             
-            if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
-                codigo_postal = ""
-                contadores['modificados'] += 1
-                print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
+            print(f"Procesando {total} estaciones encontradas en el XML...")
+        
+            print(f"------- Seguimiento de la ejecución -------")
 
-            if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
-                contadores['descartados'] += 1
-                contadores['coordenadas'] += 1
-                continue
+            for i, item in enumerate(lista_estaciones):
+
+                nombre_estacion = get_texto_from_tag(item, 'denominaci')
+
+                nombre_prov = get_texto_from_tag(item, 'serveis_territorials')
+                nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
+
+                nombre_loc = get_texto_from_tag(item, 'municipi')
+
+                tipo_estacion = "Estación_fija"
+
+                direccion = get_texto_from_tag(item, 'adre_a')
+
+                cp_raw = get_texto_from_tag(item, 'cp')
+                codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='CAT')
+
+                horario = get_texto_from_tag(item, 'horari_de_servei')
+
+                contacto = get_texto_from_tag(item, 'correu_electr_nic')
+
+                lat_raw = get_texto_from_tag(item, 'lat')
+                latitud = convertir_coordenadas(lat_raw)
+
+                long_raw = get_texto_from_tag(item, 'long')
+                longitud = convertir_coordenadas(long_raw)
+
+                tag_web = item.find('web')
+                url = tag_web.get('url')
+
+                print(f"\nInsertando datos [{i+1}/{total}], estacion: {nombre_estacion} ({nombre_loc}, {nombre_prov})")
+
+                if not nombre_prov or not nombre_loc:
+                    print(f"--Descartado (Falta provincia/localiad).")
+                    contadores['descartados'] +=1
+                    contadores['datos'] += 1
+                    continue 
+
+                if not nombre_estacion or filtro.es_duplicado(nombre_estacion):
+                    print(f"--Descartado (Nombre duplicado), nombre duplicado: {nombre_estacion}.")
+                    contadores['descartados'] += 1
+                    contadores['nombre'] += 1
+                    continue
+
+                if not filtro.es_provincia_real(nombre_prov_final):
+                    print(f"--Descartado (Provincia no válida), nombre provincia: {nombre_prov}.")
+                    contadores['descartados'] += 1
+                    contadores['provincia'] += 1
+                    continue
+
+                if tipo_estacion == "Estación_fija" and codigo_postal == "":
+                    print(f"--Descartado (CP inválido), cp: {cp_raw}.")
+                    contadores['descartados'] += 1
+                    contadores['cp'] += 1
+                    continue
+                
+                if tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros":
+                    codigo_postal = ""
+                    contadores['modificados'] += 1
+                    print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
+
+                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                    print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
+                    contadores['descartados'] += 1
+                    contadores['coordenadas'] += 1
+                    continue
 
 
-            id_prov = get_or_create_provincia(cur, nombre_prov_final)
-            id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
+                id_prov = get_or_create_provincia(cur, nombre_prov_final)
+                id_loc = get_or_create_localidad(cur, nombre_loc, id_prov)
 
-            cur.execute("""
-                INSERT INTO Estacion 
-                (nombre, tipo, direccion, codigo_postal, longitud, latitud,horario, contacto, url, codigo_localidad)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,horario, contacto, url, id_loc)
-            )
-            
-            print(f"--Insertado correctamente.")
+                cur.execute("""
+                    INSERT INTO Estacion 
+                    (nombre, tipo, direccion, codigo_postal, longitud, latitud,horario, contacto, url, codigo_localidad)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (nombre_estacion, tipo_estacion, direccion, codigo_postal, longitud, latitud,horario, contacto, url, id_loc)
+                )
+                
+                print(f"--Insertado correctamente.")
 
-            contadores['insertados'] += 1
+                contadores['insertados'] += 1
 
-        conn.commit()
+            conn.commit()
 
-        print("\n------- Resumen Final Cataluña -------")
-        print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
-        print(f"Se han descartado : {contadores['descartados']}.")
-        print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
-        print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
-        print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
-        print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
-        print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
-        print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
-        print(f"------- Resumen de los campos ({contadores['modificados']}) modificados. -------")
-        print(f"Se han modificado: {contadores['modificados']} por tener un CP en tipos de estación incorrectos.")
-        print(f"------- Final -------")
+            print("\n------- Resumen Final Cataluña -------")
+            print(f"Se han insertado : {contadores['insertados']} correctamente en la base de datos.")
+            print(f"Se han descartado : {contadores['descartados']}.")
+            print(f"------- Resumen de los campos ({contadores['descartados']}) descartados. -------")
+            print(f"Se han descartado : {contadores['cp']} por tener el CP mal registrado.")
+            print(f"Se han descartado : {contadores['datos']} por falta de datos en la provincia o localiad.")
+            print(f"Se han descartado : {contadores['coordenadas']} por tener las coordenadas mal registradas.")
+            print(f"Se han descartado : {contadores['nombre']} por tener el nombre de la estación duplicado.")
+            print(f"Se han descartado : {contadores['provincia']} por tener una provincia que no existe.")
+            print(f"------- Resumen de los campos ({contadores['modificados']}) modificados. -------")
+            print(f"Se han modificado: {contadores['modificados']} por tener un CP en tipos de estación incorrectos.")
+            print(f"------- Final -------")
 
-    except Exception as e:
-        print(f"Error en el proceso: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+            return {
+                'insertados': contadores['insertados'],
+                'descartados': contadores['descartados'],
+                'log': output_buffer.getvalue()
+            }
+
+        except Exception as e:
+            print(f"Error en el proceso: {e}")
+            if conn:
+                conn.rollback()
+            return {
+                'insertados': contadores.get('insertados', 0),
+                'descartados': contadores.get('descartados', 0),
+                'log': output_buffer.getvalue()
+            }
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
 if __name__ == "__main__":
-    procesar_datos_cat()
-    
-
-
-
+    result = procesar_datos_cat()
+    print(result)
     
 
 

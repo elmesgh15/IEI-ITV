@@ -316,7 +316,7 @@ class VentanaCarga(QWidget):
                 self.log_output.append("\n=== DETALLES POR FUENTE ===\n")
                 for fuente, detalle in resultado['detalles'].items():
                     self.log_output.append(f"\n{fuente.upper()}:")
-                    if 'error' in detalle:
+                    if detalle.get('error'):
                         self.log_output.append(f"  Error: {detalle['error']}")
                     else:
                         self.log_output.append(f"  Insertados: {detalle.get('insertados', 0)}")

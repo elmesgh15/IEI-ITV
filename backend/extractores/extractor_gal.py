@@ -1,5 +1,6 @@
 import csv
 import re
+import sys
 from io import StringIO
 
 from backend.almacen.database import conectar
@@ -74,6 +75,17 @@ def leer_datos_gal():
 
 def procesar_datos_gal():
 
+    # Buffer local
+    output_buffer = StringIO()
+
+    # Función auxiliar print
+    def print(*args, **kwargs):
+        sep = kwargs.get('sep', ' ')
+        end = kwargs.get('end', '\n')
+        msg = sep.join(map(str, args)) + end
+        output_buffer.write(msg)
+        sys.__stdout__.write(msg)
+
     print(f"------- Inicio -------")
     print(f"Iniciando extractor de Galicia...")
 
@@ -81,7 +93,11 @@ def procesar_datos_gal():
     
     if not datos_csv_galicia:
         print("No se pudieron extraer los datos.")
-        return
+        return {
+            'insertados': 0,
+            'descartados': 0,
+            'log': output_buffer.getvalue()
+        }
 
     conn = None
     cur = None
@@ -205,11 +221,22 @@ def procesar_datos_gal():
         print(f"------- Resumen de los campos ({contadores['modificados']}) modificados. -------")
         print(f"Se han modificado: {contadores['modificados']} por tener un CP en tipos de estación incorrectos.")
         print(f"------- Final -------")
+        
+        return {
+            'insertados': contadores['insertados'],
+            'descartados': contadores['descartados'],
+            'log': output_buffer.getvalue()
+        }
 
     except Exception as e:
         print(f"Error en el proceso: {e}")
         if conn:
             conn.rollback()
+        return {
+            'insertados': contadores.get('insertados', 0),
+            'descartados': contadores.get('descartados', 0),
+            'log': output_buffer.getvalue()
+        }
 
     finally:
         if cur:
@@ -218,4 +245,5 @@ def procesar_datos_gal():
             conn.close()
 
 if __name__ == "__main__":
-    procesar_datos_gal()
+    result = procesar_datos_gal()
+    print(result)

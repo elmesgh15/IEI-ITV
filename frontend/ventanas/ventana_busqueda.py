@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
-    QFrame, QGridLayout, QSpacerItem, QSizePolicy, QMessageBox
+    QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QFrame, QGridLayout, QSpacerItem, QSizePolicy, QMessageBox, QScrollArea
 )
 from PySide6.QtCore import Qt
 from frontend.componentes.mapa import MapaWidget
@@ -17,20 +17,52 @@ class VentanaBusqueda(QWidget):
         self.api_client.busqueda_completada.connect(self.mostrar_resultados)
         self.api_client.error_ocurrido.connect(self.mostrar_error)
 
-        # Main Layout
-        main_layout = QVBoxLayout()
-        self.setLayout(main_layout)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(20)
-        
-        # Set modern dark gradient background
-        self.setStyleSheet("""
-            VentanaBusqueda { 
+        # Main Scroll Area
+        scroll_layout = QVBoxLayout(self)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # Evitar scroll horizontal si es posible
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background-color: #1a1a2e;
+                width: 14px;
+                margin: 0px 0px 0px 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #457b9d, stop:1 #2a4858);
+                min-height: 20px;
+                border-radius: 7px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+
+        # Content Widget that holds everything
+        self.content_widget = QWidget()
+        # Set modern dark gradient for the content widget
+        self.content_widget.setStyleSheet("""
+            QWidget { 
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #1a1a2e, stop:0.5 #16213e, stop:1 #0f3460);
             }
         """)
 
+        # The Layout we used to have on 'self' is now on 'content_widget'
+        main_layout = QVBoxLayout(self.content_widget)
+        main_layout.setContentsMargins(80, 40, 80, 40)
+        main_layout.setSpacing(20)
+
+        self.scroll_area.setWidget(self.content_widget)
+        scroll_layout.addWidget(self.scroll_area)
+        
         # Title
         title = QLabel("Buscador de Estaciones ITV")
         title.setStyleSheet("""
@@ -39,6 +71,7 @@ class VentanaBusqueda(QWidget):
             font-family: 'Segoe UI', sans-serif; 
             font-weight: bold;
             padding: 10px;
+            background: transparent;
         """)
         main_layout.addWidget(title)
 
@@ -193,15 +226,23 @@ class VentanaBusqueda(QWidget):
 
 
         # --- Right: Map Widget ---
+        self.map_container = QFrame()
+        self.map_container.setStyleSheet("""
+            QFrame {
+                border: 4px solid #457b9d;
+                border-radius: 12px;
+                background-color: #1d3557;
+            }
+        """)
+        # Layout para el contenedor del mapa
+        map_layout = QVBoxLayout(self.map_container)
+        map_layout.setContentsMargins(4, 4, 4, 4) # Margen interno para que se vea el borde y un poco de fondo
+
         self.mapa = MapaWidget()
         self.mapa.setMinimumSize(400, 300)
-        # Add a border/shadow effect to map container if possible, or just clean
-        self.mapa.setStyleSheet("""
-            border: 3px solid #457b9d;
-            border-radius: 10px;
-            background-color: #1d3557;
-        """)
-        top_layout.addWidget(self.mapa, stretch=2)
+        
+        map_layout.addWidget(self.mapa)
+        top_layout.addWidget(self.map_container, stretch=2)
 
         # Bottom Section: Results
         results_label = QLabel("Resultados de la búsqueda:")
@@ -219,6 +260,12 @@ class VentanaBusqueda(QWidget):
             "Nombre", "Tipo", "Dirección", "Localidad", 
             "Cód. postal", "Provincia", "Descripción"
         ])
+        
+        # Configurar cabecera para que ocupe todo el ancho
+        header = self.table_results.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        
+        self.table_results.setMinimumHeight(400) # Ensure table is tall enough
         self.table_results.setStyleSheet("""
             QTableWidget {
                 border: 2px solid #457b9d;
@@ -226,6 +273,13 @@ class VentanaBusqueda(QWidget):
                 gridline-color: #2a4858;
                 background-color: #1d3557;
                 color: #f1faee;
+            }
+            QHeaderView {
+                background-color: #1d3557;
+            }
+            QTableCornerButton::section {
+                background-color: #1d3557; 
+                border: 1px solid #457b9d;
             }
             QTableWidget::item {
                 padding: 8px;
@@ -303,9 +357,6 @@ class VentanaBusqueda(QWidget):
             self.table_results.setItem(i, 4, QTableWidgetItem(estacion.get('codigo_postal', '')))
             self.table_results.setItem(i, 5, QTableWidgetItem(estacion.get('provincia', '')))
             self.table_results.setItem(i, 6, QTableWidgetItem(estacion.get('descripcion', '')))
-        
-        # Ajustar columnas al contenido
-        self.table_results.resizeColumnsToContents()
         
         # Actualizar mapa con marcadores
         self.mapa.actualizar_marcadores(estaciones)

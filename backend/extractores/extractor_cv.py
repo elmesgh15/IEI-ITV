@@ -2,6 +2,7 @@ import json
 import time
 import os
 import sys
+from io import StringIO
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -120,6 +121,17 @@ def normalizar_tipo_estacion(tipo_origen):
 
 def procesar_datos_cv():
 
+    # Buffer local
+    output_buffer = StringIO()
+
+    # Función auxiliar print
+    def print(*args, **kwargs):
+        sep = kwargs.get('sep', ' ')
+        end = kwargs.get('end', '\n')
+        msg = sep.join(map(str, args)) + end
+        output_buffer.write(msg)
+        sys.__stdout__.write(msg)
+
     print(f"------- Inicio -------")
     print("Iniciando extractor de la Comunidad Valenciana...")
 
@@ -127,7 +139,11 @@ def procesar_datos_cv():
     
     if not datos_json:
         print("No se pudieron extraer los datos.")
-        return
+        return {
+            'insertados': 0,
+            'descartados': 0,
+            'log': output_buffer.getvalue()
+        }
     
     driver = iniciar_driver()
 
@@ -243,10 +259,21 @@ def procesar_datos_cv():
         print(f"Se han modificado: {contadores['modificados']} por tener un CP en tipos de estación incorrectos.")
         print(f"------- Final -------")
 
+        return {
+            'insertados': contadores['insertados'],
+            'descartados': contadores['descartados'],
+            'log': output_buffer.getvalue()
+        }
+
     except Exception as e:
         print(f"Error en el proceso: {e}")
         if conn: 
             conn.rollback()
+        return {
+            'insertados': contadores.get('insertados', 0),
+            'descartados': contadores.get('descartados', 0),
+            'log': output_buffer.getvalue()
+        }
 
     finally:
         if driver: 
@@ -257,4 +284,5 @@ def procesar_datos_cv():
             conn.close()
 
 if __name__ == "__main__":
-    procesar_datos_cv()
+    result = procesar_datos_cv()
+    print(result)
