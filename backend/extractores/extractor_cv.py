@@ -166,19 +166,27 @@ def procesar_datos_cv():
 
         for i, item in enumerate(datos_json):
             
-            nombre_estacion = str(item.get('Nº ESTACIÓN', ''))
-
             nombre_prov = limpiar_texto(item.get('PROVINCIA'))
             nombre_prov_final = filtro.estandarizar_nombre_provincia(nombre_prov)
+            nombre_loc = limpiar_texto(item.get('MUNICIPIO')).capitalize()
+            tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
 
-            nombre_loc = limpiar_texto(item.get('MUNICIPIO'))
+
+            if tipo_estacion == "Estación_fija":
+                nombre_estacion = "Estación ITV de " + nombre_loc
+            elif tipo_estacion == "Estación_móvil":
+                nombre_estacion = "ITV móvil de " + nombre_prov_final
+            else:
+                nombre_estacion = limpiar_texto(item.get('DIRECCIÓN')) +' '+ nombre_prov_final
             
             if not nombre_loc and nombre_prov:
                 nombre_loc = nombre_prov_final
             
-            tipo_estacion = normalizar_tipo_estacion(item.get('TIPO ESTACIÓN'))
 
-            direccion = limpiar_texto(item.get('DIRECCIÓN'))
+            if (tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros"):
+                direccion = ""
+            else:
+                direccion = limpiar_texto(item.get('DIRECCIÓN'))
                 
             cp_raw = item.get('C.POSTAL')
             codigo_postal = filtro.validar_y_formatear_cp(cp_raw, comunidad_destino='CV')
@@ -192,7 +200,11 @@ def procesar_datos_cv():
             print(f"\nInsertando datos [{i+1}/{total}], estacion: {nombre_estacion} ({nombre_loc}, {nombre_prov})")
 
             print(f"--[{i+1}/{total}] Buscando coords para: {nombre_estacion} ({nombre_loc})...")
-            latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
+
+            if (tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros"):
+                latitud, longitud = None, None
+            else:
+                latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
 
             if not nombre_prov or not nombre_loc:
                 print(f"--Descartado (Falta provincia/localiad).")
@@ -223,12 +235,12 @@ def procesar_datos_cv():
                 contadores['modificados'] += 1
                 print(f"--CP modificado, ya que, tipo: {tipo_estacion} no puede contener un CP.")
 
-            if not filtro.tiene_coordenadas_validas(latitud, longitud):
-                print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
-                contadores['descartados'] += 1
-                contadores['coordenadas'] += 1
-                continue
-
+            if tipo_estacion == "Estación_fija":
+                if not filtro.tiene_coordenadas_validas(latitud, longitud):
+                    print(f"--Descartado (Sin coordenadas válidas), coordenadas: ({latitud},{longitud}).")
+                    contadores['descartados'] += 1
+                    contadores['coordenadas'] += 1
+                    continue
             provincia_id = get_or_create_provincia(cur, nombre_prov_final)
             localidad_id = get_or_create_localidad(cur, nombre_loc, provincia_id)
 
