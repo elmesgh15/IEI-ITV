@@ -1,5 +1,17 @@
-from pydantic import BaseModel
-from typing import Optional, List
+"""
+Modelos de datos Pydantic para la API de estaciones ITV.
+
+Define los esquemas de datos utilizados en los endpoints de FastAPI para:
+- Validación automática de requests y responses
+- Generación de documentación OpenAPI/Swagger
+- Serialización/deserialización JSON
+
+Todos los modelos heredan de BaseModel de Pydantic y utilizan type hints
+para validación de tipos en tiempo de ejecución.
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict
 from enum import Enum
 
 class TipoEstacion(str, Enum):
@@ -8,19 +20,25 @@ class TipoEstacion(str, Enum):
     OTROS = "Otros"
 
 class EstacionResponse(BaseModel):
-    cod_estacion: int
-    nombre: str
-    tipo: Optional[str] = None
-    direccion: Optional[str] = None
-    codigo_postal: Optional[str] = None
-    longitud: Optional[float] = None
-    latitud: Optional[float] = None
-    descripcion: Optional[str] = None
-    horario: Optional[str] = None
-    contacto: Optional[str] = None
-    url: Optional[str] = None
-    localidad: str
-    provincia: str
+    """
+    Modelo de respuesta para una estación ITV.
+    
+    Representa todos los datos de una estación incluyendo ubicación,
+    información de contacto y relaciones con localidad y provincia.
+    """
+    cod_estacion: int = Field(..., description="ID único de la estación")
+    nombre: str = Field(..., description="Nombre oficial de la estación")
+    tipo: Optional[str] = Field(None, description="Tipo de estación: Estación_fija, Estación_móvil, Otros")
+    direccion: Optional[str] = Field(None, description="Dirección física completa")
+    codigo_postal: Optional[str] = Field(None, description="Código postal (5 dígitos)")
+    longitud: Optional[float] = Field(None, description="Coordenada GPS longitud (formato decimal)")
+    latitud: Optional[float] = Field(None, description="Coordenada GPS latitud (formato decimal)")
+    descripcion: Optional[str] = Field(None, description="Descripción adicional de la estación")
+    horario: Optional[str] = Field(None, description="Horario de atención")
+    contacto: Optional[str] = Field(None, description="Información de contacto (teléfono, email)")
+    url: Optional[str] = Field(None, description="Sitio web de la estación o servicio")
+    localidad: str = Field(..., description="Nombre de la localidad/municipio")
+    provincia: str = Field(..., description="Nombre de la provincia")
 
 class BusquedaRequest(BaseModel):
     localidad: Optional[str] = None

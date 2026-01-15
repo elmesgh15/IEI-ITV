@@ -1,27 +1,96 @@
+"""
+Extractor de datos de estaciones ITV de Galicia.
+
+Este módulo procesa archivos CSV con información de estaciones ITV de Galicia,
+valida los datos, convierte coordenadas del formato DMS a decimal, y los inserta
+en la base de datos PostgreSQL.
+
+Archivo fuente: backend/datos_nuevos/Estacions_ITV.csv
+Formato: CSV delimitado por punto y coma (;)
+Codificación: UTF-8
+Campos principales: NOME DA ESTACIÓN, PROVINCIA, CONCELLO, ENDEREZO, CÓDIGO POSTAL,
+                    COORDENADAS GMAPS, HORARIO, TELÉFONO, CORREO ELECTRÓNICO
+
+El proceso incluye validaciones exhaustivas de:
+- Nombres duplicados
+- Provincias válidas
+- Códigos postales (formato y prefijo por comunidad)
+- Coordenadas GPS (rango geográfico de España)
+"""
+
 import csv
 import re
 import sys
 from io import StringIO
+from typing import Optional, Tuple
 
 from backend.almacen.database import conectar
 from backend.extractores.filtros import Validate
 
-def limpiar_texto(texto):
+def limpiar_texto(texto: Optional[str]) -> Optional[str]:
+    """
+    Elimina espacios en blanco al inicio y final de un texto.
+    
+    Args:
+        texto: Cadena de texto a limpiar, puede ser None
+    
+    Returns:
+        Texto limpio sin espacios laterales, o None si la entrada es None
+    
+    Example:
+        >>> limpiar_texto("  Hola Mundo  ")
+        'Hola Mundo'
+        >>> limpiar_texto(None)
+        None
+    """
     if texto:
         return texto.strip() 
     return texto
 
-def convertir_coordenadas(coord_str):
+def convertir_coordenadas(coord_str: Optional[str]) -> Optional[float]:
+    """
+    Convierte coordenadas de formato DMS (grados, minutos) a formato decimal.
+    
+    Soporta múltiples formatos de entrada:
+    - Decimal directo: "42.345678" → 42.345678
+    - Grados y minutos: "42° 20.74" → 42.345667
+    - Variantes con símbolos: "42º 20.74", "42 20.74"
+    
+    Args:
+        coord_str: Cadena con la coordenada en formato DMS o decimal
+    
+    Returns:
+        Coordenada en formato decimal (float), o None si no se puede convertir
+    
+    Algorithm:
+        Para formato DMS:
+        1. Extrae grados y minutos usando regex
+        2. Convierte: decimal = grados + (minutos / 60)
+        3. Si grados es negativo: decimal = grados - (minutos / 60)
+    
+    Examples:
+        >>> convertir_coordenadas("42.345678")
+        42.345678
+        >>> convertir_coordenadas("42° 20.74")
+        42.345667
+        >>> convertir_coordenadas("-8° 30.5")
+        -8.508333
+        >>> convertir_coordenadas("invalid")
+        None
+    """
     if not coord_str:
         return None
     
     coord_limpia = coord_str.strip()
 
+    # Intentar conversión directa a decimal
     try:
         return float(coord_limpia)
     except ValueError:
         pass
 
+    # Patrón para formato DMS: grados° minutos
+    # Captura: (-?\d+) = grados con signo opcional, (\d+\.?\d*) = minutos con decimales
     patron = re.compile(r"(-?\d+)[°º\s]+(\d+\.?\d*)")
     match = patron.search(coord_limpia)
     
@@ -30,6 +99,7 @@ def convertir_coordenadas(coord_str):
             grados = float(match.group(1))
             minutos = float(match.group(2))
             
+            # Aplicar fórmula de conversión respetando el signo
             if grados < 0:
                 decimal = grados - (minutos / 60)
             else:
@@ -41,7 +111,20 @@ def convertir_coordenadas(coord_str):
     
     return None
 
-def get_or_create_provincia(cursor, nombre_provincia):
+def get_or_create_provincia(cursor, nombre_provincia: str) -> int:
+    """
+    Obtiene el código de una provincia o la crea si no existe.
+    
+    Args:
+        cursor: Cursor de base de datos PostgreSQL
+        nombre_provincia: Nombre de la provincia
+    
+    Returns:
+        Código (ID) de la provincia
+    
+    Note:
+        Utiliza RETURNING para obtener el ID en una sola query al insertar.
+    """
     cursor.execute("SELECT codigo FROM Provincia WHERE nombre = %s", (nombre_provincia,))
     resultado = cursor.fetchone()
     if resultado:
@@ -50,7 +133,22 @@ def get_or_create_provincia(cursor, nombre_provincia):
         cursor.execute("INSERT INTO Provincia (nombre) VALUES (%s) RETURNING codigo", (nombre_provincia,))
         return cursor.fetchone()[0]
 
-def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
+def get_or_create_localidad(cursor, nombre_localidad: str, provincia_id: int) -> int:
+    """
+    Obtiene el código de una localidad o la crea si no existe.
+    
+    Args:
+        cursor: Cursor de base de datos PostgreSQL
+        nombre_localidad: Nombre de la localidad/municipio
+        provincia_id: Código de la provincia a la que pertenece
+    
+    Returns:
+        Código (ID) de la localidad
+    
+    Note:
+        La búsqueda se hace por nombre Y provincia para evitar duplicados
+        entre localidades con el mismo nombre en diferentes provincias.
+    """
     cursor.execute("SELECT codigo FROM Localidad WHERE nombre = %s AND codigo_provincia = %s", (nombre_localidad, provincia_id))
     resultado = cursor.fetchone()
     if resultado:
@@ -59,7 +157,16 @@ def get_or_create_localidad(cursor, nombre_localidad, provincia_id):
         cursor.execute("INSERT INTO Localidad (nombre, codigo_provincia) VALUES (%s, %s) RETURNING codigo", (nombre_localidad, provincia_id))
         return cursor.fetchone()[0]
     
-def leer_datos_gal():
+def leer_datos_gal() -> Optional[str]:
+    """
+    Lee el archivo CSV de estaciones ITV de Galicia.
+    
+    Returns:
+        Contenido completo del archivo CSV como string, o None si hay error
+    
+    Raises:
+        Imprime error en consola pero no lanza excepción
+    """
     ruta_archivo_csv = "backend/datos_nuevos/Estacions_ITV.csv"
     try:
         with open(ruta_archivo_csv, mode='r', encoding='utf-8') as f:
@@ -73,7 +180,47 @@ def leer_datos_gal():
 
 
 
-def procesar_datos_gal():
+def procesar_datos_gal() -> dict:
+    """
+    Procesa y carga datos de estaciones ITV de Galicia en la base de datos.
+    
+    Esta es la función principal del extractor de Galicia. Realiza el proceso completo:
+    1. Lee el archivo CSV de estaciones
+    2. Parsea los datos con csv.DictReader
+    3. Para cada estación:
+       - Extrae y limpia los campos
+       - Valida provincia, localidad, CP y coordenadas
+       - Convierte coordenadas DMS a decimal
+       - Descarta registros inválidos con logging detallado
+       - Inserta registros válidos en la BD
+    4. Hace commit de la transacción
+    5. Retorna estadísticas del proceso
+    
+    Returns:
+        dict: Diccionario con:
+            - insertados (int): Cantidad de registros insertados exitosamente
+            - descartados (int): Cantidad de registros rechazados
+            - log (str): Log completo del proceso con detalles de cada operación
+    
+    Validaciones aplicadas (en orden):
+        1. Provincia y localidad no vacías
+        2. Nombre de estación no duplicado
+        3. Provincia válida (existe en MAPA_PROVINCIAS)
+        4. Código postal válido para estaciones fijas
+        5. CP vacío para estaciones móviles/otros
+        6. Coordenadas dentro del rango geográfico de España
+    
+    Note:
+        - Usa StringIO para capturar logs sin afectar stdout global
+        - Todas las operaciones de BD están en una transacción
+        - En caso de error, hace rollback automático
+        - Los contadores incluyen métricas detalladas por tipo de descarte
+    
+    Example:
+        >>> resultado = procesar_datos_gal()
+        >>> print(f"Insertados: {resultado['insertados']}")
+        >>> print(f"Descartados: {resultado['descartados']}")
+    """
 
     # Buffer local
     output_buffer = StringIO()
