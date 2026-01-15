@@ -1,6 +1,11 @@
 from io import StringIO
 import sys
+from fastapi import APIRouter
+from backend.models import WrapperResponse
 
+router = APIRouter()
+
+@router.post("/cargar", response_model=WrapperResponse)
 def ejecutar_carga_cv():
 
     from backend.extractores.extractor_cv import procesar_datos_cv

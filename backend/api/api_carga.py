@@ -1,15 +1,16 @@
 from fastapi import APIRouter, HTTPException
 from backend.models import CargaRequest, CargaResponse, EstadoAlmacenResponse
 from backend.almacen.database import conectar
-from backend.wrappers.wrapper_cv import ejecutar_carga_cv
-from backend.wrappers.wrapper_gal import ejecutar_carga_gal
-from backend.wrappers.wrapper_cat import ejecutar_carga_cat
+import httpx
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 router = APIRouter(prefix="/api", tags=["carga"])
 
-executor = ThreadPoolExecutor(max_workers=1)
+async def call_wrapper(url: str):
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        response = await client.post(url)
+        response.raise_for_status()
+        return response.json()
 
 @router.post("/cargar", response_model=CargaResponse)
 async def cargar_datos(request: CargaRequest):
@@ -26,45 +27,34 @@ async def cargar_datos(request: CargaRequest):
     detalles = {}
     
     try:
+        tasks = []
+        labels = []
 
         if request.valencia:
-            try:
-                resultado = await asyncio.get_event_loop().run_in_executor(
-                    executor, ejecutar_carga_cv
-                )
-                total_insertados += resultado.get('insertados', 0)
-                total_descartados += resultado.get('descartados', 0)
-                detalles['valencia'] = resultado
-                mensajes.append(f"Valencia: {resultado.get('insertados', 0)} insertados, {resultado.get('descartados', 0)} descartados")
-            except Exception as e:
-                mensajes.append(f"Error en Valencia: {str(e)}")
-                detalles['valencia'] = {'error': str(e)}
+            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/cv/cargar"))
+            labels.append("valencia")
         
         if request.galicia:
-            try:
-                resultado = await asyncio.get_event_loop().run_in_executor(
-                    executor, ejecutar_carga_gal
-                )
-                total_insertados += resultado.get('insertados', 0)
-                total_descartados += resultado.get('descartados', 0)
-                detalles['galicia'] = resultado
-                mensajes.append(f"Galicia: {resultado.get('insertados', 0)} insertados, {resultado.get('descartados', 0)} descartados")
-            except Exception as e:
-                mensajes.append(f"Error en Galicia: {str(e)}")
-                detalles['galicia'] = {'error': str(e)}
+            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/gal/cargar"))
+            labels.append("galicia")
         
         if request.catalunya:
-            try:
-                resultado = await asyncio.get_event_loop().run_in_executor(
-                    executor, ejecutar_carga_cat
-                )
-                total_insertados += resultado.get('insertados', 0)
-                total_descartados += resultado.get('descartados', 0)
-                detalles['catalunya'] = resultado
-                mensajes.append(f"Catalunya: {resultado.get('insertados', 0)} insertados, {resultado.get('descartados', 0)} descartados")
-            except Exception as e:
-                mensajes.append(f"Error en Catalunya: {str(e)}")
-                detalles['catalunya'] = {'error': str(e)}
+            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/cat/cargar"))
+            labels.append("catalunya")
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for label, result in zip(labels, results):
+            if isinstance(result, Exception):
+                mensajes.append(f"Error en {label.capitalize()}: {str(result)}")
+                detalles[label] = {'error': str(result)}
+            else:
+                insertados = result.get('insertados', 0)
+                descartados = result.get('descartados', 0)
+                total_insertados += insertados
+                total_descartados += descartados
+                detalles[label] = result
+                mensajes.append(f"{label.capitalize()}: {insertados} insertados, {descartados} descartados")
         
         mensaje_final = "\n".join(mensajes)
         

@@ -49,6 +49,13 @@ class CargaResponse(BaseModel):
     descartados: int = 0
     detalles: Optional[dict] = None
 
+class WrapperResponse(BaseModel):
+    success: bool
+    insertados: int
+    descartados: int
+    log: str
+    error: Optional[str] = None
+
 class EstadoAlmacenResponse(BaseModel):
     total_estaciones: int
     total_provincias: int
