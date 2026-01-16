@@ -25,6 +25,12 @@ def iniciar_driver():
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--headless=new") 
+    chrome_options.add_argument("--window-size=1920,1080") 
+    
+    
+    prefs = {"profile.default_content_setting_values.geolocation": 2}
+    chrome_options.add_experimental_option("prefs", prefs)
     
     driver = webdriver.Chrome(options=chrome_options)
     return driver
@@ -36,11 +42,35 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
     try:
         if driver.current_url != url and not driver.current_url.startswith(url):
             driver.get(url)
+            time.sleep(2) 
             try:
-                boton_cookies = WebDriverWait(driver, 3).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Aceptar') or contains(text(), 'Consent')]"))
-                )
-                boton_cookies.click()
+               
+                xpath_consent = "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'consent') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'acept') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'agree')]"
+                try:
+                    btns_consent = WebDriverWait(driver, 4).until(
+                        EC.presence_of_all_elements_located((By.XPATH, xpath_consent))
+                    )
+                    for btn in btns_consent:
+                        if btn.is_displayed():
+                            driver.execute_script("arguments[0].click();", btn)
+                            time.sleep(1) 
+                except:
+                    pass
+
+                
+                xpath_ok = "//*[translate(normalize-space(.), 'OK', 'ok')='ok!' or translate(normalize-space(.), 'OK', 'ok')='ok']"
+                try:
+                    btns_ok = WebDriverWait(driver, 3).until(
+                        EC.presence_of_all_elements_located((By.XPATH, xpath_ok))
+                    )
+                    for btn in btns_ok:
+                        if btn.is_displayed() and btn.is_enabled():
+                            driver.execute_script("arguments[0].click();", btn)
+                            time.sleep(0.5)
+                            break
+                except:
+                    pass
+                
             except:
                 pass 
 
@@ -49,24 +79,45 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
         )
         input_address.clear()
         input_address.send_keys(busqueda)
-
-        # Pre-check old value to detect change
+        
         try:
-            lat_input_pre = driver.find_element(By.ID, "latitude")
-            old_lat = lat_input_pre.get_attribute("value")
+            WebDriverWait(driver, 5).until(
+                lambda d: d.find_element(By.ID, "address").get_attribute("value") != ""
+            )
+            time.sleep(1)
+        except:
+            pass
+
+        try:
+            old_lat = driver.find_element(By.ID, "latitude").get_attribute("value")
         except NoSuchElementException:
             old_lat = ""
 
-        boton_buscar = driver.find_element(By.XPATH, "//button[contains(@class, 'btn-primary') and contains(text(), 'GPS')]")
-        boton_buscar.click()
+        try:
+            xpath_gps = "//button[contains(., 'Obtener Coordenadas GPS') or (contains(@class, 'btn-primary') and contains(., 'GPS'))]"
+            
+            boton_buscar = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, xpath_gps))
+            )
+            
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", boton_buscar)
+            time.sleep(1)
+            
+            try:
+                boton_buscar.click()
+            except:
+                driver.execute_script("arguments[0].click();", boton_buscar)
+                
+        except Exception as e:
+            print(f"Error al pulsar boton GPS: {e}")
+            pass
 
-        # Wait for latitude value to change (max 15s)
         try:
             WebDriverWait(driver, 15).until(
                 lambda d: d.find_element(By.ID, "latitude").get_attribute("value") != old_lat
             )
         except TimeoutException:
-            # It might be that the coordinates didn't change or took too long
+            print("Timeout esperando cambio de coordenadas")
             pass 
         
         lat_input = driver.find_element(By.ID, "latitude")
@@ -135,10 +186,8 @@ def normalizar_tipo_estacion(tipo_origen):
 
 def procesar_datos_cv():
 
-    # Buffer local
     output_buffer = StringIO()
 
-    # Función auxiliar print
     def print(*args, **kwargs):
         sep = kwargs.get('sep', ' ')
         end = kwargs.get('end', '\n')
@@ -218,7 +267,23 @@ def procesar_datos_cv():
             if (tipo_estacion == "Estación_móvil" or tipo_estacion == "Otros"):
                 latitud, longitud = None, None
             else:
-                latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
+                max_retries = 3
+                for attempt in range(max_retries):
+                    latitud, longitud = obtener_coordenadas(driver, direccion, nombre_loc, nombre_prov)
+                    
+                    if latitud is not None and longitud is not None:
+                        if abs(latitud - 40.712) < 0.1 and abs(longitud - (-74.006)) < 0.1:
+                            print(f"--Intento {attempt+1}/{max_retries}: Coordenadas incorrectas (NYC detected), reintentando...")
+                            time.sleep(2)
+                            continue
+                        else:
+                            break
+                    else:
+                        print(f"--Intento {attempt+1}/{max_retries}: Fallo al obtener coordenadas, reintentando...")
+                        time.sleep(2)
+                else:
+                    print(f"--Fallo: No se pudieron obtener coordenadas válidas tras {max_retries} intentos.")
+                    latitud, longitud = None, None
 
             if not nombre_prov or not nombre_loc:
                 print(f"--Descartado (Falta provincia/localiad).")

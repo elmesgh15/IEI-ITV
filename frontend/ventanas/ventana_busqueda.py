@@ -45,9 +45,7 @@ class VentanaBusqueda(QWidget):
             }
         """)
 
-        # Content Widget that holds everything
         self.content_widget = QWidget()
-        # Set modern dark gradient for the content widget
         self.content_widget.setStyleSheet("""
             QWidget { 
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -55,7 +53,6 @@ class VentanaBusqueda(QWidget):
             }
         """)
 
-        # The Layout we used to have on 'self' is now on 'content_widget'
         main_layout = QVBoxLayout(self.content_widget)
         main_layout.setContentsMargins(80, 40, 80, 40)
         main_layout.setSpacing(20)
@@ -63,7 +60,6 @@ class VentanaBusqueda(QWidget):
         self.scroll_area.setWidget(self.content_widget)
         scroll_layout.addWidget(self.scroll_area)
         
-        # Title
         title = QLabel("Buscador de Estaciones ITV")
         title.setStyleSheet("""
             font-size: 28px; 
@@ -75,12 +71,10 @@ class VentanaBusqueda(QWidget):
         """)
         main_layout.addWidget(title)
 
-        # Top Section: Form (Left) and Map (Right)
         top_layout = QHBoxLayout()
         top_layout.setSpacing(40)
         main_layout.addLayout(top_layout)
 
-        # --- Left: Search Form ---
         form_container = QWidget()
         form_container.setStyleSheet("""
             QWidget {
@@ -94,7 +88,6 @@ class VentanaBusqueda(QWidget):
         form_layout.setVerticalSpacing(15)
         form_layout.setHorizontalSpacing(10)
         
-        # Labels Style
         label_style = """
             font-size: 14px; 
             color: #a8dadc; 
@@ -102,7 +95,6 @@ class VentanaBusqueda(QWidget):
             background: transparent;
         """
         
-        # Inputs Style
         input_style = """
             QLineEdit, QComboBox {
                 border: 2px solid #457b9d;
@@ -167,14 +159,14 @@ class VentanaBusqueda(QWidget):
         self.combo_tipo.addItems(["", "Estación_fija", "Estación_móvil", "Otros"])
         form_layout.addWidget(self.combo_tipo, 3, 1)
 
-        # Buttons
+        # Botones
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
         
         self.btn_cancelar = QPushButton("Cancelar")
         self.btn_buscar = QPushButton("Buscar")
         
-        # Button Styles
+        # Estilo botones
         self.btn_cancelar.setCursor(Qt.PointingHandCursor)
         self.btn_cancelar.setStyleSheet("""
             QPushButton {
@@ -211,21 +203,19 @@ class VentanaBusqueda(QWidget):
             }
         """)
 
-        buttons_layout.addStretch() # Push buttons to the right
+        buttons_layout.addStretch() 
         buttons_layout.addWidget(self.btn_cancelar)
         buttons_layout.addWidget(self.btn_buscar)
         
-        # Add buttons to form layout
         form_layout.addLayout(buttons_layout, 4, 1)
         
-        # Add spacer to push form up
         vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         form_layout.addItem(vertical_spacer, 5, 1)
 
         top_layout.addWidget(form_container, stretch=1)
 
 
-        # --- Right: Map Widget ---
+        # --- Mapa Widget ---
         self.map_container = QFrame()
         self.map_container.setStyleSheet("""
             QFrame {
@@ -236,7 +226,7 @@ class VentanaBusqueda(QWidget):
         """)
         # Layout para el contenedor del mapa
         map_layout = QVBoxLayout(self.map_container)
-        map_layout.setContentsMargins(4, 4, 4, 4) # Margen interno para que se vea el borde y un poco de fondo
+        map_layout.setContentsMargins(4, 4, 4, 4) 
 
         self.mapa = MapaWidget()
         self.mapa.setMinimumSize(400, 300)
@@ -244,7 +234,6 @@ class VentanaBusqueda(QWidget):
         map_layout.addWidget(self.mapa)
         top_layout.addWidget(self.map_container, stretch=2)
 
-        # Bottom Section: Results
         results_label = QLabel("Resultados de la búsqueda:")
         results_label.setStyleSheet("""
             font-size: 18px; 
@@ -261,11 +250,10 @@ class VentanaBusqueda(QWidget):
             "Cód. postal", "Provincia", "Descripción"
         ])
         
-        # Configurar cabecera para que ocupe todo el ancho
         header = self.table_results.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         
-        self.table_results.setMinimumHeight(400) # Ensure table is tall enough
+        self.table_results.setMinimumHeight(400) 
         self.table_results.setStyleSheet("""
             QTableWidget {
                 border: 2px solid #457b9d;
@@ -317,8 +305,8 @@ class VentanaBusqueda(QWidget):
         self.btn_buscar.clicked.connect(self.realizar_busqueda)
         self.btn_cancelar.clicked.connect(self.limpiar_formulario)
 
-        # Cargar todas las estaciones al iniciar
-        self.api_client.obtener_todas_estaciones()
+        # Conectar señal del mapa para cuando cargue estaciones
+        self.mapa.estaciones_cargadas.connect(self.mostrar_resultados_inicio)
     
     def realizar_busqueda(self):
         """Ejecuta la búsqueda usando los filtros del formulario"""
@@ -348,8 +336,8 @@ class VentanaBusqueda(QWidget):
         self.table_results.setRowCount(0)
         self.mapa.actualizar_marcadores([])
     
-    def mostrar_resultados(self, estaciones):
-        """Muestra los resultados de la búsqueda en la tabla y el mapa"""
+    def _llenar_tabla(self, estaciones):
+        """Helper para rellenar la tabla con estaciones"""
         self.table_results.setRowCount(len(estaciones))
         
         for i, estacion in enumerate(estaciones):
@@ -360,9 +348,18 @@ class VentanaBusqueda(QWidget):
             self.table_results.setItem(i, 4, QTableWidgetItem(estacion.get('codigo_postal', '')))
             self.table_results.setItem(i, 5, QTableWidgetItem(estacion.get('provincia', '')))
             self.table_results.setItem(i, 6, QTableWidgetItem(estacion.get('descripcion', '')))
+
+    def mostrar_resultados_inicio(self, estaciones):
+        """Muestra resultados de carga inicial (sin actualizar mapa ni zoom)"""
+        # Solo rellenamos la tabla, el mapa ya se actualizó internamente
+        self._llenar_tabla(estaciones)
+
+    def mostrar_resultados(self, estaciones):
+        """Muestra los resultados de la búsqueda (con zoom en el mapa)"""
+        self._llenar_tabla(estaciones)
         
-        # Actualizar mapa con marcadores
-        self.mapa.actualizar_marcadores(estaciones)
+        # Solo enfocar las estaciones encontradas, SIN cambiar los marcadores
+        self.mapa.enfocar_estaciones(estaciones)
         
         # Mostrar mensaje si no hay resultados
         if len(estaciones) == 0:
@@ -371,4 +368,10 @@ class VentanaBusqueda(QWidget):
     def mostrar_error(self, mensaje):
         """Muestra un mensaje de error"""
         QMessageBox.critical(self, "Error", f"Error en la operación:\n{mensaje}")
+
+    def showEvent(self, event):
+        """Se llama cuando el widget se muestra (cambio de pestaña o inicio)"""
+        super().showEvent(event)
+        # Recargar estaciones cada vez que se muestra la ventana
+        self.mapa.cargar_estaciones()
 
