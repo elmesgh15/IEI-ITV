@@ -70,6 +70,14 @@ class APIClient(QObject):
         request = QNetworkRequest(QUrl(url))
         reply = self.manager.get(request)
         reply.finished.connect(lambda: self._handle_busqueda_response(reply))
+
+    def obtener_todas_estaciones(self):
+        """Obtiene todas las estaciones sin filtros"""
+        url = f"{self.base_url}/api/estaciones"
+        request = QNetworkRequest(QUrl(url))
+        reply = self.manager.get(request)
+        # Reutilizamos el manejador de respuesta de búsqueda ya que el formato es el mismo
+        reply.finished.connect(lambda: self._handle_busqueda_response(reply))
     
     def _handle_busqueda_response(self, reply: QNetworkReply):
         """Maneja la respuesta de búsqueda"""

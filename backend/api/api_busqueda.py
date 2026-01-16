@@ -147,6 +147,25 @@ async def buscar_estaciones(
             conn.close()
 
 @router.get(
+    "/estaciones",
+    response_model=List[EstacionResponse],
+    summary="Obtener todas las estaciones",
+    description="Retorna todas las estaciones disponibles sin filtros.",
+    response_description="Lista completa de estaciones"
+)
+async def obtener_todas_estaciones():
+    """
+    Obtiene todas las estaciones ITV disponibles en la base de datos.
+    
+    Este endpoint es equivalente a buscar sin filtros, pero proporciona
+    una URL semántica específica para obtener el catálogo completo.
+    
+    Returns:
+        List[EstacionResponse]: Lista completa de estaciones.
+    """
+    return await buscar_estaciones(localidad=None, codigo_postal=None, provincia=None, tipo=None)
+
+@router.get(
     "/provincias",
     response_model=List[ProvinciaResponse],
     summary="Obtener lista de provincias",

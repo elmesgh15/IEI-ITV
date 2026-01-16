@@ -316,6 +316,9 @@ class VentanaBusqueda(QWidget):
         # Conectar señales de botones
         self.btn_buscar.clicked.connect(self.realizar_busqueda)
         self.btn_cancelar.clicked.connect(self.limpiar_formulario)
+
+        # Cargar todas las estaciones al iniciar
+        self.api_client.obtener_todas_estaciones()
     
     def realizar_busqueda(self):
         """Ejecuta la búsqueda usando los filtros del formulario"""
