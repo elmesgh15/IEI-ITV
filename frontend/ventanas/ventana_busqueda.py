@@ -328,13 +328,13 @@ class VentanaBusqueda(QWidget):
         )
     
     def limpiar_formulario(self):
-        """Limpia todos los campos del formulario"""
+        """Limpia todos los campos del formulario y recarga todas las estaciones"""
         self.input_localidad.clear()
         self.input_cp.clear()
         self.input_provincia.clear()
         self.combo_tipo.setCurrentIndex(0)
-        self.table_results.setRowCount(0)
-        self.mapa.actualizar_marcadores([])
+        # Recargar todas las estaciones (rellena tabla y actualiza mapa sin cambiar zoom)
+        self.mapa.cargar_estaciones()
     
     def _llenar_tabla(self, estaciones):
         """Helper para rellenar la tabla con estaciones"""
