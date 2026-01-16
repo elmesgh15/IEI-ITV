@@ -50,10 +50,24 @@ def obtener_coordenadas(driver, direccion, municipio, provincia):
         input_address.clear()
         input_address.send_keys(busqueda)
 
+        # Pre-check old value to detect change
+        try:
+            lat_input_pre = driver.find_element(By.ID, "latitude")
+            old_lat = lat_input_pre.get_attribute("value")
+        except NoSuchElementException:
+            old_lat = ""
+
         boton_buscar = driver.find_element(By.XPATH, "//button[contains(@class, 'btn-primary') and contains(text(), 'GPS')]")
         boton_buscar.click()
 
-        time.sleep(5) 
+        # Wait for latitude value to change (max 15s)
+        try:
+            WebDriverWait(driver, 15).until(
+                lambda d: d.find_element(By.ID, "latitude").get_attribute("value") != old_lat
+            )
+        except TimeoutException:
+            # It might be that the coordinates didn't change or took too long
+            pass 
         
         lat_input = driver.find_element(By.ID, "latitude")
         lon_input = driver.find_element(By.ID, "longitude")

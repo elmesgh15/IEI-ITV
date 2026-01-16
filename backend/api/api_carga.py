@@ -111,15 +111,15 @@ async def cargar_datos(request: CargaRequest):
         labels = []
 
         if request.valencia:
-            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/cv/cargar"))
+            tasks.append(call_wrapper("http://127.0.0.1:8001/api/wrapper/cv/cargar"))
             labels.append("valencia")
         
         if request.galicia:
-            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/gal/cargar"))
+            tasks.append(call_wrapper("http://127.0.0.1:8002/api/wrapper/gal/cargar"))
             labels.append("galicia")
         
         if request.catalunya:
-            tasks.append(call_wrapper("http://127.0.0.1:8000/api/wrapper/cat/cargar"))
+            tasks.append(call_wrapper("http://127.0.0.1:8003/api/wrapper/cat/cargar"))
             labels.append("catalunya")
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -233,82 +233,4 @@ async def borrar_almacen():
         if conn:
             conn.close()
 
-@router.get(
-    "/estado",
-    response_model=EstadoAlmacenResponse,
-    summary="Obtener estado del almacén",
-    description="Retorna estadísticas actuales de la base de datos",
-    response_description="Estadísticas completas del almacén"
-)
-async def obtener_estado():
-    """
-    Obtiene estadísticas actuales del almacén de datos.
-    
-    Este endpoint proporciona información sobre el estado actual de la base de datos,
-    útil para dashboards y verificación del sistema.
-    
-    Returns:
-        EstadoAlmacenResponse: Objeto con:
-            - total_estaciones: Cantidad total de estaciones
-            - total_provincias: Cantidad de provincias únicas
-            - total_localidades: Cantidad de localidades únicas
-            - estaciones_por_tipo: Diccionario con conteo por tipo de estación
-    
-    Raises:
-        HTTPException:
-            - 500: Si hay error de conexión o en las consultas
-    
-    Example:
-        GET /api/estado
-        
-        Response: {
-            "total_estaciones": 150,
-            "total_provincias": 12,
-            "total_localidades": 45,
-            "estaciones_por_tipo": {
-                "Estación_fija": 140,
-                "Estación_móvil": 8,
-                "Otros": 2
-            }
-        }
-    """
 
-    conn = conectar()
-    if not conn:
-        raise HTTPException(status_code=500, detail="Error al conectar con la base de datos")
-    
-    try:
-        cur = conn.cursor()
-        
-        cur.execute("SELECT COUNT(*) FROM Estacion")
-        total_estaciones = cur.fetchone()[0]
-        
-        cur.execute("SELECT COUNT(*) FROM Provincia")
-        total_provincias = cur.fetchone()[0]
-        
-        cur.execute("SELECT COUNT(*) FROM Localidad")
-        total_localidades = cur.fetchone()[0]
-        
-        cur.execute("""
-            SELECT tipo, COUNT(*) 
-            FROM Estacion 
-            GROUP BY tipo
-        """)
-        tipos = cur.fetchall()
-        estaciones_por_tipo = {tipo: count for tipo, count in tipos}
-        
-        return EstadoAlmacenResponse(
-            total_estaciones=total_estaciones,
-            total_provincias=total_provincias,
-            total_localidades=total_localidades,
-            estaciones_por_tipo=estaciones_por_tipo
-        )
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener estado: {str(e)}")
-    
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
