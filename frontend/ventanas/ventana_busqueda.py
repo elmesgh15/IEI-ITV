@@ -164,7 +164,7 @@ class VentanaBusqueda(QWidget):
         form_layout.addWidget(lbl_tipo, 3, 0)
         
         self.combo_tipo = QComboBox()
-        self.combo_tipo.addItems(["", "Estación_fija", "Estación_móvil"])
+        self.combo_tipo.addItems(["", "Estación_fija", "Estación_móvil", "Otros"])
         form_layout.addWidget(self.combo_tipo, 3, 1)
 
         # Buttons

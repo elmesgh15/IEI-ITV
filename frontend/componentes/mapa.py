@@ -56,7 +56,6 @@ class MapaWidget(QWidget):
         estaciones: lista de diccionarios con los datos de las estaciones
         """
         if not estaciones:
-            # Limpiar marcadores
             js_code = """
                 if (window.markersLayer) {
                     window.markersLayer.clearLayers();
@@ -65,7 +64,6 @@ class MapaWidget(QWidget):
             self.browser.page().runJavaScript(js_code)
             return
         
-        # Crear código JavaScript para agregar marcadores
         js_marcadores = []
         for estacion in estaciones:
             lat = estacion.get('latitud')

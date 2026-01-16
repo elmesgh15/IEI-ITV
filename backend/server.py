@@ -57,16 +57,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from backend.wrappers.wrapper_gal import router as gal_router
-from backend.wrappers.wrapper_cat import router as cat_router
-from backend.wrappers.wrapper_cv import router as cv_router
-
 # Registrar routers
 app.include_router(busqueda_router)
 app.include_router(carga_router)
-app.include_router(gal_router, prefix="/api/wrapper/gal", tags=["wrapper-galicia"])
-app.include_router(cat_router, prefix="/api/wrapper/cat", tags=["wrapper-catalunya"])
-app.include_router(cv_router, prefix="/api/wrapper/cv", tags=["wrapper-valencia"])
 
 @app.get("/")
 async def root():
